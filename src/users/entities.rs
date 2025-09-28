@@ -9,7 +9,6 @@ pub struct User {
     pub email: String,
     pub phone: String,
     pub avatar_url: String,
-    pub password: String,
     pub created_at: chrono::NaiveDateTime,
     pub last_seen: chrono::NaiveDateTime,
 }

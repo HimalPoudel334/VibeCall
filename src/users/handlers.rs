@@ -43,7 +43,7 @@ pub async fn create_user(
         )
         .await
     {
-        Ok(user) => Ok(HttpResponse::Ok().json(ApiResponse::success(user))),
+        Ok(user) => Ok(HttpResponse::Created().json(ApiResponse::success(user))),
         Err(e) => Ok(
             HttpResponse::BadRequest().json(ApiResponse::<User>::error(format!(
                 "Error creating user: {}",

@@ -17,6 +17,11 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to create SQLite pool");
 
+    sqlx::migrate!("./migrations")
+        .run(&sqlite_pool)
+        .await
+        .expect("Failed to run database migrations");
+
     let base_url =
         std::env::var("BASE_URL").unwrap_or_else(|_| format!("http://localhost:{}", server_port));
 
