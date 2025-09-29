@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use actix_web::{HttpResponse, ResponseError, http::StatusCode};
+use actix_web::{HttpResponse, ResponseError, Result as ActixResult, http::StatusCode};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,6 +63,8 @@ pub enum AppError {
     BadRequest(String),
 
     Unauthorized(String),
+
+    Database(String),
 }
 
 impl Display for AppError {
@@ -73,6 +75,7 @@ impl Display for AppError {
             AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
             AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
+            AppError::Database(msg) => write!(f, "Database error: {}", msg),
         }
     }
 }
@@ -85,7 +88,9 @@ impl ResponseError for AppError {
             AppError::Validation(_) | AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
-            AppError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::InternalServerError(_) | AppError::Database(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 
@@ -95,9 +100,31 @@ impl ResponseError for AppError {
             AppError::Validation(msg)
             | AppError::BadRequest(msg)
             | AppError::Unauthorized(msg)
+            | AppError::Database(msg)
             | AppError::InternalServerError(msg) => ApiResponse::<()>::error(msg.clone()),
         };
 
         HttpResponse::build(self.status_code()).json(body)
+    }
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(error: sqlx::Error) -> Self {
+        AppError::Database(error.to_string())
+    }
+}
+
+pub fn respond_ok<T: serde::Serialize>(data: T) -> ActixResult<HttpResponse> {
+    Ok(HttpResponse::Ok().json(ApiResponse::success(data)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_error_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<AppError>();
     }
 }

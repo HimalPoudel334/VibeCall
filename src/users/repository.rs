@@ -1,29 +1,16 @@
-use crate::users::{self, entities::User};
+use crate::{
+    shared::response::AppError,
+    users::{self, entities::User},
+};
 use async_trait::async_trait;
 
 #[async_trait]
 pub trait UserRepository {
-    async fn get_by_id(
-        &self,
-        id: i32,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>>;
-    async fn create(
-        &self,
-        user: users::entities::NewUser,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>>;
-    async fn get_by_email(
-        &self,
-        email: &str,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>>;
-    async fn get_by_phone(
-        &self,
-        phone: &str,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>>;
-    async fn update_avatar(
-        &self,
-        user_id: i32,
-        avatar_url: &str,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>>;
+    async fn get_by_id(&self, id: i32) -> Result<Option<User>, AppError>;
+    async fn create(&self, user: users::entities::NewUser) -> Result<User, AppError>;
+    async fn get_by_email(&self, email: &str) -> Result<Option<User>, AppError>;
+    async fn get_by_phone(&self, phone: &str) -> Result<Option<User>, AppError>;
+    async fn update_avatar(&self, user_id: i32, avatar_url: &str) -> Result<User, AppError>;
 }
 
 // Concrete implementation
@@ -39,10 +26,7 @@ impl SqliteUserRepository {
 
 #[async_trait]
 impl UserRepository for SqliteUserRepository {
-    async fn get_by_id(
-        &self,
-        id: i32,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_by_id(&self, id: i32) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             SELECT 
@@ -64,17 +48,14 @@ impl UserRepository for SqliteUserRepository {
         Ok(user)
     }
 
-    async fn create(
-        &self,
-        user: users::entities::NewUser,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+    async fn create(&self, user: users::entities::NewUser) -> Result<User, AppError> {
         let created_user = sqlx::query_as::<_, User>(
             r#"
                 INSERT INTO users (
                     first_name, last_name, email,
                     phone, avatar_url, password
                 )
-                VALUES ($1 $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING
                     id, first_name, last_name, email, phone, created_at, last_seen, avatar_url
                 "#,
@@ -91,10 +72,7 @@ impl UserRepository for SqliteUserRepository {
         Ok(created_user)
     }
 
-    async fn get_by_email(
-        &self,
-        email: &str,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             SELECT 
@@ -115,10 +93,7 @@ impl UserRepository for SqliteUserRepository {
         Ok(user)
     }
 
-    async fn get_by_phone(
-        &self,
-        phone: &str,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_by_phone(&self, phone: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             SELECT 
@@ -139,11 +114,7 @@ impl UserRepository for SqliteUserRepository {
         Ok(user)
     }
 
-    async fn update_avatar(
-        &self,
-        user_id: i32,
-        avatar_url: &str,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+    async fn update_avatar(&self, user_id: i32, avatar_url: &str) -> Result<User, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             UPDATE 

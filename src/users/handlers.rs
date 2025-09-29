@@ -4,7 +4,10 @@ use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Result as ActixResult, get, post, web};
 
 use crate::{
-    shared::{file_service::FileService, response::ApiResponse},
+    shared::{
+        file_service::FileService,
+        response::{ApiResponse, respond_ok},
+    },
     users::{
         contract::{AvatarUpload, NewUser},
         entities::User,
@@ -19,13 +22,9 @@ pub async fn get_user(
 ) -> ActixResult<HttpResponse> {
     let user_id = path.into_inner();
 
-    match user_service.get_by_id(user_id).await {
-        Ok(Some(user)) => Ok(HttpResponse::Ok().json(ApiResponse::success(user))),
-        Ok(None) => Ok(HttpResponse::NotFound()
-            .json(ApiResponse::<User>::not_found("User not found".to_string()))),
-        Err(e) => Ok(HttpResponse::InternalServerError()
-            .json(ApiResponse::<User>::error(format!("Database error: {}", e)))),
-    }
+    let user = user_service.get_by_id(user_id).await?;
+
+    respond_ok(user)
 }
 
 #[post("")]

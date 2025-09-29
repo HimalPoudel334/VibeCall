@@ -7,10 +7,7 @@ use std::{path::Path, sync::Arc};
 
 #[async_trait]
 pub trait UserService: Send + Sync {
-    async fn get_by_id(
-        &self,
-        id: i32,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>>;
+    async fn get_by_id(&self, id: i32) -> Result<Option<User>, AppError>;
 
     async fn create(
         &self,
@@ -19,13 +16,9 @@ pub trait UserService: Send + Sync {
         email: String,
         phone: String,
         password: String,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>>;
+    ) -> Result<User, AppError>;
 
-    async fn update_avatar(
-        &self,
-        user_id: i32,
-        avatar_url: &str,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>>;
+    async fn update_avatar(&self, user_id: i32, avatar_url: &str) -> Result<User, AppError>;
 
     async fn upload_avatar(
         &self,
@@ -48,12 +41,9 @@ impl UserServiceImpl {
 
 #[async_trait]
 impl UserService for UserServiceImpl {
-    async fn get_by_id(
-        &self,
-        id: i32,
-    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_by_id(&self, id: i32) -> Result<Option<User>, AppError> {
         if id <= 0 {
-            return Err("User ID must be positive".into());
+            return Err(AppError::Validation("User ID must be positive".into()));
         }
         self.repository.get_by_id(id).await
     }
@@ -65,24 +55,30 @@ impl UserService for UserServiceImpl {
         email: String,
         phone: String,
         password: String,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<User, AppError> {
         if first_name.is_empty() || last_name.is_empty() || email.is_empty() || password.is_empty()
         {
-            return Err("First name, last name, email, phone and password cannot be empty".into());
+            return Err(AppError::Validation(
+                "First name, last name, email, phone and password cannot be empty".into(),
+            ));
         }
 
         if self.repository.get_by_email(&email).await?.is_some() {
-            return Err("Email already in use".into());
+            return Err(AppError::Validation("Email already in use".into()));
         }
 
         if self.repository.get_by_phone(&phone).await?.is_some() {
-            return Err("Phone number already in use".into());
+            return Err(AppError::Validation("Phone number already in use".into()));
         }
 
         let hash_password_result = utils::hash_password(&password);
         let hashed_password = match hash_password_result {
             Ok(hash) => hash,
-            Err(_) => return Err("Failed to hash password".into()),
+            Err(_) => {
+                return Err(AppError::InternalServerError(
+                    "Failed to hash password".into(),
+                ));
+            }
         };
 
         let new_user =
@@ -91,17 +87,13 @@ impl UserService for UserServiceImpl {
         self.repository.create(new_user).await
     }
 
-    async fn update_avatar(
-        &self,
-        user_id: i32,
-        avatar_url: &str,
-    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+    async fn update_avatar(&self, user_id: i32, avatar_url: &str) -> Result<User, AppError> {
         if user_id <= 0 {
-            return Err("User ID must be positive".into());
+            return Err(AppError::Validation("User ID must be positive".into()));
         }
 
         if avatar_url.is_empty() {
-            return Err("Avatar URL cannot be empty".into());
+            return Err(AppError::Validation("Avatar URL cannot be empty".into()));
         }
 
         let user = self.repository.update_avatar(user_id, avatar_url).await?;
@@ -137,9 +129,7 @@ impl UserService for UserServiceImpl {
             Ok(user) => Ok(user),
             Err(e) => {
                 let _ = file_service.delete_avatar(&filename).await;
-                Err(AppError::InternalServerError(format!(
-                    "Failed to update user avatar: {e}"
-                )))
+                Err(e)
             }
         }
     }
