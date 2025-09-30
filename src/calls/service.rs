@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[async_trait]
-pub trait CallService {
+pub trait CallService: Send + Sync {
     async fn create_call(
         &self,
         room_id: String,
@@ -45,6 +45,8 @@ pub trait CallService {
         &self,
         call_id: i32,
     ) -> Result<Vec<CallParticipant>, AppError>;
+
+    async fn count_active_participants(&self, call_id: i32) -> Result<i64, AppError>;
 }
 
 pub struct CallServiceImpl {
@@ -212,7 +214,7 @@ impl CallService for CallServiceImpl {
             .get_call_by_id(call_id)
             .await?
             .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
-        if call.status != "active" {
+        if call.status != CallStatus::Active {
             return Err(AppError::Validation(format!(
                 "Cannot add participant to non-active call {}",
                 call_id
@@ -289,7 +291,6 @@ impl CallService for CallServiceImpl {
     }
 
     async fn list_call_participants(&self, call_id: i32) -> Result<Vec<CallParticipant>, AppError> {
-        // Check if call exists
         self.call_repo
             .get_call_by_id(call_id)
             .await?
@@ -302,12 +303,20 @@ impl CallService for CallServiceImpl {
         &self,
         call_id: i32,
     ) -> Result<Vec<CallParticipant>, AppError> {
-        // Check if call exists
         self.call_repo
             .get_call_by_id(call_id)
             .await?
             .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
 
         self.call_repo.list_active_participants(call_id).await
+    }
+
+    async fn count_active_participants(&self, call_id: i32) -> Result<i64, AppError> {
+        self.call_repo
+            .get_call_by_id(call_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
+
+        self.call_repo.count_active_participants(call_id).await
     }
 }

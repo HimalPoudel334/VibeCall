@@ -21,12 +21,12 @@ pub async fn get_user(
 ) -> ActixResult<HttpResponse> {
     let user_id = path.into_inner();
 
-    let user = user_service.get_by_id(user_id).await?;
+    let user = user_service
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("User with id {} not found", user_id)))?;
 
-    match user {
-        Some(user) => respond_ok(user),
-        None => Err(AppError::NotFound("User not found".to_string()).into()),
-    }
+    respond_ok(user)
 }
 
 #[post("")]

@@ -17,12 +17,12 @@ pub async fn get_room(
 ) -> ActixResult<HttpResponse> {
     let room_id = room_id.into_inner();
 
-    let user = room_service.get_room(&room_id).await?;
+    let room = room_service
+        .get_room(&room_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Room with id {} not found", room_id)))?;
 
-    match user {
-        Some(user) => respond_ok(user),
-        None => Err(AppError::NotFound("Room not found".to_string()).into()),
-    }
+    respond_ok(room)
 }
 
 #[post("")]

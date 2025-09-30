@@ -56,7 +56,7 @@ pub struct Call {
     pub id: i32,
     pub room_id: String,
     pub caller_id: i32,
-    pub status: String,
+    pub status: CallStatus,
     pub started_at: String,
     pub ended_at: Option<String>,
     pub duration: Option<i32>,

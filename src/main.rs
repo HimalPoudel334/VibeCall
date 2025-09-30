@@ -39,7 +39,7 @@ async fn main() -> std::io::Result<()> {
         Arc::new(rooms::RoomServiceImpl::new(room_repo));
 
     let call_repo = Arc::new(calls::SqliteCallRepository::new(sqlite_pool.clone()));
-    let _call_service: Arc<dyn calls::CallService> = Arc::new(calls::CallServiceImpl::new(
+    let call_service: Arc<dyn calls::CallService> = Arc::new(calls::CallServiceImpl::new(
         call_repo,
         room_service.clone(),
         user_service.clone(),
@@ -57,9 +57,11 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(file_service.clone()))
             .app_data(Data::new(user_service.clone()))
             .app_data(Data::new(room_service.clone()))
+            .app_data(Data::new(call_service.clone()))
             .configure(users::routes::user_routes)
             .configure(infrastructure::routes::infrastructure_routes)
             .configure(rooms::routes::room_routes)
+            .configure(calls::routes::call_routes)
             .service(
                 Files::new("/media", "./media")
                     .use_last_modified(true)
