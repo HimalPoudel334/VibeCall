@@ -3,7 +3,7 @@ use std::sync::Arc;
 use actix_files::Files;
 use actix_web::{App, HttpServer, web::Data};
 use vibecall::{
-    infrastructure, rooms,
+    calls, infrastructure, rooms,
     shared::file_service::{FileService, LocalFileService},
     users,
 };
@@ -37,6 +37,13 @@ async fn main() -> std::io::Result<()> {
     let room_repo = Arc::new(rooms::SqliteRoomRepository::new(sqlite_pool.clone()));
     let room_service: Arc<dyn vibecall::rooms::RoomService> =
         Arc::new(rooms::RoomServiceImpl::new(room_repo));
+
+    let call_repo = Arc::new(calls::SqliteCallRepository::new(sqlite_pool.clone()));
+    let _call_service: Arc<dyn calls::CallService> = Arc::new(calls::CallServiceImpl::new(
+        call_repo,
+        room_service.clone(),
+        user_service.clone(),
+    ));
 
     println!("Server started on {}:{}", server_address, server_port);
 

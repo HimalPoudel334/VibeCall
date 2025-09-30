@@ -6,11 +6,10 @@ use actix_web::{HttpResponse, Result as ActixResult, get, post, web};
 use crate::{
     shared::{
         file_service::FileService,
-        response::{ApiResponse, respond_ok},
+        response::{AppError, respond_ok},
     },
     users::{
         contract::{AvatarUpload, NewUser},
-        entities::User,
         service::UserService,
     },
 };
@@ -24,7 +23,10 @@ pub async fn get_user(
 
     let user = user_service.get_by_id(user_id).await?;
 
-    respond_ok(user)
+    match user {
+        Some(user) => respond_ok(user),
+        None => Err(AppError::NotFound("User not found".to_string()).into()),
+    }
 }
 
 #[post("")]
@@ -32,7 +34,7 @@ pub async fn create_user(
     user_json: web::Json<NewUser>,
     user_service: web::Data<Arc<dyn UserService>>,
 ) -> ActixResult<HttpResponse> {
-    match user_service
+    let user = user_service
         .create(
             user_json.first_name.clone(),
             user_json.last_name.clone(),
@@ -40,16 +42,9 @@ pub async fn create_user(
             user_json.phone.get_number().to_string(),
             user_json.password.clone(),
         )
-        .await
-    {
-        Ok(user) => Ok(HttpResponse::Created().json(ApiResponse::success(user))),
-        Err(e) => Ok(
-            HttpResponse::BadRequest().json(ApiResponse::<User>::error(format!(
-                "Error creating user: {}",
-                e
-            ))),
-        ),
-    }
+        .await?;
+
+    respond_ok(user)
 }
 
 #[post("/{id}/avatar")]
@@ -67,5 +62,5 @@ pub async fn upload_avatar(
         )
         .await?;
 
-    Ok(HttpResponse::Ok().json(ApiResponse::success(user)))
+    respond_ok(user)
 }

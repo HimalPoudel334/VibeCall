@@ -1,5 +1,6 @@
+pub mod contract;
 pub mod entities;
-mod handlers;
+pub mod handlers;
 pub mod repository;
 pub mod routes;
 pub mod service;

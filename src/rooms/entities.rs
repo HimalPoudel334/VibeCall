@@ -57,7 +57,9 @@ impl FromStr for RoomType {
             "group" => Ok(RoomType::Group),
             "meeting" => Ok(RoomType::Meeting),
             "instant" => Ok(RoomType::Instant),
-            _ => Err(AppError::Validation(format!("Invalid room type: '{}'", s))),
+            _ => Err(AppError::Validation(
+                "Invalid room type provided! Valid values are: 'public', 'private', 'one_on_one', 'group', 'meeting', 'instant'".to_string(),
+            )),
         }
     }
 }

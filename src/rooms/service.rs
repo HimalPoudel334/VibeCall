@@ -16,7 +16,7 @@ pub trait RoomService: Send + Sync {
     async fn create_room(
         &self,
         name: String,
-        room_type: RoomType,
+        room_type: String,
         created_by: i32,
         description: Option<String>,
     ) -> Result<Room, AppError>;
@@ -60,13 +60,15 @@ impl RoomService for RoomServiceImpl {
     async fn create_room(
         &self,
         name: String,
-        room_type: RoomType,
+        room_type: String,
         created_by: i32,
         description: Option<String>,
     ) -> Result<Room, AppError> {
         if name.trim().is_empty() {
             return Err(AppError::Validation("Room name cannot be empty".into()));
         }
+
+        let room_type = room_type.parse::<RoomType>()?;
 
         let max_participants = match room_type {
             RoomType::OneOnOne => 2,

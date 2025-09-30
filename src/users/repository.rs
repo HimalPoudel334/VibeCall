@@ -35,9 +35,9 @@ impl UserRepository for SqliteUserRepository {
                 last_name, 
                 email, 
                 phone, 
-                last_seen, 
                 avatar_url, 
-                created_at 
+                created_at,
+                last_seen
             FROM users 
             WHERE id = $1"#,
         )
@@ -81,6 +81,7 @@ impl UserRepository for SqliteUserRepository {
                 last_name, 
                 email, 
                 phone,
+                avatar_url,
                 created_at, 
                 last_seen 
             FROM users 
@@ -102,6 +103,7 @@ impl UserRepository for SqliteUserRepository {
                 last_name, 
                 email, 
                 phone,
+                avatar_url,
                 created_at, 
                 last_seen 
             FROM users 
@@ -122,7 +124,7 @@ impl UserRepository for SqliteUserRepository {
             SET 
                 avatar_url = %1 
             WHERE id = $2
-            RETURNING    
+            RETURNING
                 id, first_name, last_name, email, phone, created_at, last_seen, avatar_url
             "#,
         )

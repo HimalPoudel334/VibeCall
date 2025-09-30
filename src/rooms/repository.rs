@@ -16,61 +16,32 @@ pub trait RoomRepository {
         room_type: RoomType,
         created_by: i32,
         description: Option<String>,
-    ) -> Result<Room, Box<dyn std::error::Error + Send + Sync>>;
+    ) -> Result<Room, AppError>;
 
-    async fn get_by_id(
-        &self,
-        room_id: &str,
-    ) -> Result<Option<Room>, Box<dyn std::error::Error + Send + Sync>>;
+    async fn get_by_id(&self, room_id: &str) -> Result<Option<Room>, AppError>;
 
-    async fn list_rooms(
-        &self,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<Room>, Box<dyn std::error::Error + Send + Sync>>;
+    async fn list_rooms(&self, limit: i64, offset: i64) -> Result<Vec<Room>, AppError>;
 
-    async fn delete(&self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    async fn delete(&self, room_id: &str) -> Result<(), AppError>;
 
-    async fn join_room(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    async fn join_room(&self, room_id: &str, user_id: i32) -> Result<(), AppError>;
 
-    async fn leave_room(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    async fn leave_room(&self, room_id: &str, user_id: i32) -> Result<(), AppError>;
 
-    async fn list_room_users(
-        &self,
-        room_id: &str,
-    ) -> Result<Vec<User>, Box<dyn std::error::Error + Send + Sync>>;
+    async fn list_room_users(&self, room_id: &str) -> Result<Vec<User>, AppError>;
 
-    async fn is_user_in_room(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
+    async fn is_user_in_room(&self, room_id: &str, user_id: i32) -> Result<bool, AppError>;
 
-    async fn is_user_owner(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
+    async fn is_user_owner(&self, room_id: &str, user_id: i32) -> Result<bool, AppError>;
 
-    async fn count_active_members(
-        &self,
-        room_id: &str,
-    ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>>;
+    async fn count_active_members(&self, room_id: &str) -> Result<i64, AppError>;
 
     async fn update_member_role(
         &self,
         room_id: &str,
         user_id: i32,
         role: RoomMemberRole,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    ) -> Result<(), AppError>;
 }
 
 pub struct SqliteRoomRepository {
@@ -91,7 +62,7 @@ impl RoomRepository for SqliteRoomRepository {
         room_type: RoomType,
         created_by: i32,
         description: Option<String>,
-    ) -> Result<Room, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Room, AppError> {
         let room_id = Uuid::new_v4().to_string();
         let room = sqlx::query_as::<_, Room>(
             r#"
@@ -111,10 +82,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(room)
     }
 
-    async fn get_by_id(
-        &self,
-        room_id: &str,
-    ) -> Result<Option<Room>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_by_id(&self, room_id: &str) -> Result<Option<Room>, AppError> {
         let room = sqlx::query_as::<_, Room>("SELECT * FROM rooms WHERE id = $1")
             .bind(room_id)
             .fetch_optional(&self.pool)
@@ -123,11 +91,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(room)
     }
 
-    async fn list_rooms(
-        &self,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<Room>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn list_rooms(&self, limit: i64, offset: i64) -> Result<Vec<Room>, AppError> {
         let rooms = sqlx::query_as::<_, Room>(
             r#"
                 SELECT 
@@ -145,7 +109,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(rooms)
     }
 
-    async fn delete(&self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn delete(&self, room_id: &str) -> Result<(), AppError> {
         sqlx::query("DELETE FROM rooms WHERE id = $1")
             .bind(room_id)
             .execute(&self.pool)
@@ -154,11 +118,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(())
     }
 
-    async fn join_room(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn join_room(&self, room_id: &str, user_id: i32) -> Result<(), AppError> {
         sqlx::query(
             r#"
             INSERT OR IGNORE INTO room_members (room_id, user_id)
@@ -172,11 +132,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(())
     }
 
-    async fn leave_room(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn leave_room(&self, room_id: &str, user_id: i32) -> Result<(), AppError> {
         let updated = sqlx::query(
             r#"
             UPDATE room_members
@@ -190,18 +146,15 @@ impl RoomRepository for SqliteRoomRepository {
         .await?;
 
         if updated.rows_affected() == 0 {
-            return Err(Box::new(AppError::NotFound(format!(
+            return Err(AppError::NotFound(format!(
                 "User {} not in room {}",
                 user_id, room_id
-            ))));
+            )));
         }
         Ok(())
     }
 
-    async fn list_room_users(
-        &self,
-        room_id: &str,
-    ) -> Result<Vec<User>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn list_room_users(&self, room_id: &str) -> Result<Vec<User>, AppError> {
         let users = sqlx::query_as::<_, User>(
             r#"
             SELECT u.*
@@ -216,11 +169,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(users)
     }
 
-    async fn is_user_in_room(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    async fn is_user_in_room(&self, room_id: &str, user_id: i32) -> Result<bool, AppError> {
         let exists = sqlx::query_scalar(
             r#"
             SELECT EXISTS (
@@ -236,11 +185,7 @@ impl RoomRepository for SqliteRoomRepository {
         Ok(exists)
     }
 
-    async fn is_user_owner(
-        &self,
-        room_id: &str,
-        user_id: i32,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    async fn is_user_owner(&self, room_id: &str, user_id: i32) -> Result<bool, AppError> {
         let is_owner = sqlx::query_scalar::<_, bool>(
             r#"
             SELECT EXISTS (
@@ -252,16 +197,12 @@ impl RoomRepository for SqliteRoomRepository {
         .bind(room_id)
         .bind(user_id)
         .fetch_one(&self.pool)
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        .await?;
 
         Ok(is_owner)
     }
 
-    async fn count_active_members(
-        &self,
-        room_id: &str,
-    ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
+    async fn count_active_members(&self, room_id: &str) -> Result<i64, AppError> {
         let count = sqlx::query_scalar(
             "SELECT COUNT(*) FROM room_members WHERE room_id = $1 AND left_at IS NULL",
         )
@@ -276,7 +217,7 @@ impl RoomRepository for SqliteRoomRepository {
         room_id: &str,
         user_id: i32,
         role: RoomMemberRole,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), AppError> {
         let updated = sqlx::query(
             r#"
             UPDATE room_members SET role = $1
@@ -290,10 +231,10 @@ impl RoomRepository for SqliteRoomRepository {
         .await?;
 
         if updated.rows_affected() == 0 {
-            return Err(Box::new(AppError::NotFound(format!(
+            return Err(AppError::NotFound(format!(
                 "User {} not in room {}",
                 user_id, room_id
-            ))));
+            )));
         }
         Ok(())
     }
