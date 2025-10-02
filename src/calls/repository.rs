@@ -45,6 +45,8 @@ pub trait CallRepository {
     ) -> Result<Vec<CallParticipant>, AppError>;
 
     async fn count_active_participants(&self, call_id: i32) -> Result<i64, AppError>;
+
+    async fn is_user_participant(&self, call_id: i32, user_id: i32) -> Result<bool, AppError>;
 }
 
 pub struct SqliteCallRepository {
@@ -233,5 +235,23 @@ impl CallRepository for SqliteCallRepository {
         .await?;
 
         Ok(count)
+    }
+
+    async fn is_user_participant(&self, call_id: i32, user_id: i32) -> Result<bool, AppError> {
+        let is_partipant: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM call_participants
+                WHERE call_id = $1 AND user_id = $2
+            ) AS is_participant;
+            "#,
+        )
+        .bind(call_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(is_partipant)
     }
 }

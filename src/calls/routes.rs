@@ -19,3 +19,4 @@ pub fn call_routes(cfg: &mut web::ServiceConfig) {
             .service(handlers::count_active_participants),
     );
 }
+

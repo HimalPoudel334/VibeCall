@@ -47,6 +47,8 @@ pub trait CallService: Send + Sync {
     ) -> Result<Vec<CallParticipant>, AppError>;
 
     async fn count_active_participants(&self, call_id: i32) -> Result<i64, AppError>;
+
+    async fn is_user_participant(&self, call_id: i32, user_id: i32) -> Result<bool, AppError>;
 }
 
 pub struct CallServiceImpl {
@@ -214,6 +216,7 @@ impl CallService for CallServiceImpl {
             .get_call_by_id(call_id)
             .await?
             .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
+
         if call.status != CallStatus::Active {
             return Err(AppError::Validation(format!(
                 "Cannot add participant to non-active call {}",
@@ -245,11 +248,9 @@ impl CallService for CallServiceImpl {
             .get_room(&call.room_id)
             .await?
             .ok_or_else(|| AppError::NotFound(format!("Room {} not found", call.room_id)))?;
-        let active_participants = self
-            .call_repo
-            .list_active_participants(call_id)
-            .await?
-            .len() as i64;
+
+        let active_participants = self.count_active_participants(call_id).await?;
+
         if active_participants >= room.max_participants as i64 {
             return Err(AppError::Validation(format!(
                 "Call {} has reached the room's participant limit ({})",
@@ -269,8 +270,8 @@ impl CallService for CallServiceImpl {
             .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
 
         // Check if user is a participant
-        let participants = self.call_repo.list_active_participants(call_id).await?;
-        if !participants.iter().any(|p| p.user_id == user_id) {
+        let is_participant: bool = self.call_repo.is_user_participant(call_id, user_id).await?;
+        if !is_participant {
             return Err(AppError::NotFound(format!(
                 "User {} is not a participant in call {}",
                 user_id, call_id
@@ -318,5 +319,19 @@ impl CallService for CallServiceImpl {
             .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
 
         self.call_repo.count_active_participants(call_id).await
+    }
+
+    async fn is_user_participant(&self, call_id: i32, user_id: i32) -> Result<bool, AppError> {
+        self.call_repo
+            .get_call_by_id(call_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
+
+        self.user_service
+            .get_by_id(user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
+
+        self.call_repo.is_user_participant(call_id, user_id).await
     }
 }
