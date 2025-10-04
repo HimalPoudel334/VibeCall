@@ -1,10 +1,10 @@
-use crate::calls::entities::CallStatus;
 use crate::calls::service::CallService;
+use crate::calls::{entities::CallStatus, websocket::OutgoingMessage};
 use crate::rooms::service::RoomService;
-use actix_ws::Message;
+use crate::shared::response::AppError;
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 pub type Sender = UnboundedSender<OutgoingMessage>;
 
@@ -12,16 +12,14 @@ pub type Sender = UnboundedSender<OutgoingMessage>;
 pub struct Connection {
     pub user_id: i32,
     pub room_id: String,
-    pub call_id: Option<i32>, // Track which call this connection belongs to
+    pub call_id: Option<i32>,
     pub sender: Sender,
 }
 
 pub struct SignalingServer {
-    // In-memory tracking
     connections: DashMap<i32, Connection>,
     rooms: DashMap<String, Vec<i32>>,
 
-    // Injected services for database operations
     call_service: Arc<dyn CallService>,
     room_service: Arc<dyn RoomService>,
 }
@@ -36,7 +34,6 @@ impl SignalingServer {
         }
     }
 
-    // User joins a room via WebSocket
     pub async fn add_connection(
         &self,
         user_id: i32,
@@ -53,33 +50,21 @@ impl SignalingServer {
 
         self.connections.insert(user_id, connection);
 
-        self.rooms
-            .entry(room_id.clone())
-            .or_insert_with(Vec::new)
-            .push(user_id);
+        self.rooms.entry(room_id.clone()).or_default().push(user_id);
 
-        // 2. Database: Record room membership
         self.room_service.join_room(&room_id, user_id).await?;
 
         Ok(())
     }
 
-    // User starts or joins an active call
-    pub async fn join_call(
-        &self,
-        user_id: i32,
-        room_id: String,
-    ) -> Result<i32, Box<dyn std::error::Error>> {
-        // 1. Check if there's an active call in this room
+    pub async fn join_call(&self, user_id: i32, room_id: String) -> Result<i32, AppError> {
         let active_calls = self.call_service.get_calls_by_room_id(&room_id).await?;
 
         let call_id = if let Some(active_call) =
             active_calls.iter().find(|c| c.status == CallStatus::Active)
         {
-            // Join existing call
             active_call.id
         } else {
-            // Create new call
             let call = self
                 .call_service
                 .create_call(room_id.clone(), user_id, CallStatus::Active.to_string())
@@ -87,12 +72,10 @@ impl SignalingServer {
             call.id
         };
 
-        // 2. Add user as participant in database
         self.call_service
             .add_call_participant(call_id, user_id)
             .await?;
 
-        // 3. Update in-memory connection with call_id
         if let Some(mut connection) = self.connections.get_mut(&user_id) {
             connection.call_id = Some(call_id);
         }
@@ -100,15 +83,12 @@ impl SignalingServer {
         Ok(call_id)
     }
 
-    // User disconnects
     pub async fn remove_connection(&self, user_id: i32) {
         if let Some((_, connection)) = self.connections.remove(&user_id) {
-            // 1. Remove from in-memory room tracking
             if let Some(mut room_users) = self.rooms.get_mut(&connection.room_id) {
                 room_users.retain(|&id| id != user_id);
             }
 
-            // 2. Database: Mark participant as left (if in a call)
             if let Some(call_id) = connection.call_id {
                 let _ = self
                     .call_service
@@ -116,7 +96,6 @@ impl SignalingServer {
                     .await;
             }
 
-            // 4. Database: Mark as left room
             let _ = self
                 .room_service
                 .leave_room(&connection.room_id, user_id)
@@ -124,10 +103,9 @@ impl SignalingServer {
         }
     }
 
-    // Update send_to_user to accept string
     pub fn send_to_user(&self, user_id: i32, message: &str) -> Result<(), String> {
         if let Some(connection) = self.connections.get(&user_id) {
-            let msg = Message::Text(message.into());
+            let msg = OutgoingMessage::Text(message.into());
             connection
                 .sender
                 .send(msg)
@@ -148,8 +126,7 @@ impl SignalingServer {
         }
     }
 
-    // Get currently connected users in room (in-memory)
-    pub fn get_room_users(&self, room_id: &str) -> Vec<i32> {
+    pub async fn get_room_users(&self, room_id: &str) -> Vec<i32> {
         self.rooms
             .get(room_id)
             .map(|users| users.clone())

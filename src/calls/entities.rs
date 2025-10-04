@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-use crate::shared::response::AppError;
+use crate::{calls::contract::PublicUser, shared::response::AppError, users::User};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "text", rename_all = "snake_case")]
@@ -96,4 +96,34 @@ pub enum SignalingMessage {
     // User leaving call
     #[serde(rename = "leave")]
     Leave { room_id: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ServerMessage {
+    #[serde(rename = "user-joined")]
+    UserJoined { user: PublicUser, users: Vec<User> },
+
+    #[serde(rename = "user-left")]
+    UserLeft {
+        user_id: i32,
+        users: Vec<PublicUser>,
+    }, 
+
+    #[serde(rename = "offer")]
+    Offer { from: i32, sdp: String },
+
+    #[serde(rename = "answer")]
+    Answer { from: i32, sdp: String },
+
+    #[serde(rename = "ice-candidate")]
+    IceCandidate {
+        from: i32,
+        candidate: String,
+        sdp_mid: Option<String>,
+        sdp_m_line_index: Option<u16>,
+    },
+
+    #[serde(rename = "error")]
+    Error { message: String },
 }

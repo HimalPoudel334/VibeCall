@@ -1,10 +1,13 @@
 use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, web};
 use actix_ws::{CloseReason, Message, MessageStream, handle};
+use futures::{StreamExt, TryStreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::calls::{
-    contract::UserIdParam, entities::SignalingMessage, signalling_server::SignalingServer,
+    contract::UserIdParam,
+    entities::{ServerMessage, SignalingMessage},
+    signalling_server::SignalingServer,
 };
 
 #[derive(Debug)]
@@ -13,7 +16,7 @@ pub enum OutgoingMessage {
     Binary(Vec<u8>),
     Close(Option<CloseReason>),
 }
-
+/*
 pub async fn websocket_handler(
     req: HttpRequest,
     stream: web::Payload,
@@ -25,7 +28,7 @@ pub async fn websocket_handler(
     let user_id = user.user_id.clone();
 
     // Establish WebSocket connection
-    let (response, session, msg_stream) = handle(&req, stream)?;
+    let (response, mut session, msg_stream) = handle(&req, stream)?;
 
     // Convert low-level stream into aggregated message stream
     let mut msg_stream = msg_stream
@@ -42,7 +45,7 @@ pub async fn websocket_handler(
     server.add_connection(user_id.clone(), room_id.clone(), tx.clone());
 
     // Task to handle outgoing messages
-    let session_clone = session.clone();
+    let mut session_clone = session.clone();
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             match msg {
@@ -66,10 +69,9 @@ pub async fn websocket_handler(
     // Task to handle incoming messages
     let server_clone = server.get_ref().clone();
     tokio::spawn(async move {
-        while let Some(msg) = msg_stream.next().await {
+        while let Some(msg) = msg_stream.try_next().await.transpose() {
             match msg {
                 Ok(actix_ws::AggregatedMessage::Text(text)) => {
-                    // You might forward this to your signaling server here
                     println!("[{}] Received text: {}", user_id, text);
                 }
                 Ok(actix_ws::AggregatedMessage::Binary(bin)) => {
@@ -81,6 +83,9 @@ pub async fn websocket_handler(
                 Ok(actix_ws::AggregatedMessage::Close(reason)) => {
                     let _ = session.close(reason).await;
                 }
+                Ok(actix_ws::AggregatedMessage::Pong(pong)) => {
+                    let _ = session.pong(&pong).await;
+                }
                 Err(e) => {
                     eprintln!("[{}] WebSocket error: {:?}", user_id, e);
                 }
@@ -88,7 +93,7 @@ pub async fn websocket_handler(
         }
 
         // Client disconnected
-        server_clone.remove_connection(&user_id, &room_id);
+        server_clone.remove_connection(user_id);
     });
 
     Ok(response)
@@ -105,14 +110,14 @@ async fn handle_websocket_messages(
         match msg {
             Ok(Message::Text(text)) => {
                 if let Err(e) =
-                    handle_text_message(&user_id, &room_id, &text, &server, &mut session).await
+                    handle_text_message(user_id, &room_id, &text, &server, &mut session).await
                 {
                     eprintln!("eprintln handling text message: {}", e);
-                    let error_msg = ServerMessage::eprintln {
+                    let error_msg = ServerMessage::Error {
                         message: e.to_string(),
                     };
                     if let Ok(json) = serde_json::to_string(&error_msg) {
-                        let _ = session.send(Message::Text(json.into())).await;
+                        let _ = session.text(json).await;
                     }
                 }
             }
@@ -121,7 +126,7 @@ async fn handle_websocket_messages(
                 break;
             }
             Ok(Message::Ping(bytes)) => {
-                let _ = session.send(Message::Pong(bytes)).await;
+                let _ = session.pong(&bytes).await;
             }
             Ok(_) => {
                 // Ignore other message types
@@ -134,7 +139,7 @@ async fn handle_websocket_messages(
     }
 
     // Clean up connection
-    server.remove_connection(&user_id);
+    server.remove_connection(user_id);
     println!("Cleaned up connection for user {}", user_id);
 }
 
@@ -148,25 +153,28 @@ async fn handle_text_message(
     let message: SignalingMessage = serde_json::from_str(text)?;
 
     match &message {
-        SignalingMessage::Join { user_name } => {
-            let users = server.join_call(user_id, room_id.to_string())?;
+        SignalingMessage::Join { room_id, user_id } => {
+            let user = server.join_call(*user_id, room_id.to_string()).await?;
 
-            // Send current users list to the new user
-            let response = ServerMessage::UserJoined {
-                user: users.iter().find(|u| u.id == *user_id).unwrap().clone(),
-                users,
-            };
+            // // Send current users list to the new user
+            // let response = ServerMessage::UserJoined {
+            //     user: users.iter().find(|u| u.id == *user_id).unwrap().clone(),
+            //     users,
+            // };
+            //
+            let users = server.get_room_users(&room_id);
 
             let json = serde_json::to_string(&response)?;
-            session.send(Message::Text(json.into())).await?;
+            session.text(json).await?;
         }
         SignalingMessage::Leave { room_id } => {
             server.remove_connection(user_id);
         }
         _ => {
-            server.handle_signaling_message(*user_id, message)?;
+            server.handle_signaling_message(user_id, message)?;
         }
     }
 
     Ok(())
 }
+*/

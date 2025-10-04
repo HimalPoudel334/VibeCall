@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use actix_web::{HttpResponse, Result as ActixResult, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, get, post, rt, web};
+use actix_ws::AggregatedMessage;
+use futures::StreamExt;
 
 use crate::{
     calls::{
@@ -157,4 +159,42 @@ pub async fn count_active_participants(
     let call_id = call_id.into_inner();
     let count = call_service.count_active_participants(call_id).await?;
     respond_ok(count)
+}
+
+#[get("/echo")]
+pub async fn echo(req: HttpRequest, stream: web::Payload) -> ActixResult<HttpResponse> {
+    let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
+
+    let mut stream = stream
+        .aggregate_continuations()
+        // aggregate continuation frames up to 1MiB
+        .max_continuation_size(2_usize.pow(20));
+
+    // start task but don't wait for it
+    rt::spawn(async move {
+        // receive messages from websocket
+        while let Some(msg) = stream.next().await {
+            match msg {
+                Ok(AggregatedMessage::Text(text)) => {
+                    // echo text message
+                    session.text(text).await.unwrap();
+                }
+
+                Ok(AggregatedMessage::Binary(bin)) => {
+                    // echo binary message
+                    session.binary(bin).await.unwrap();
+                }
+
+                Ok(AggregatedMessage::Ping(msg)) => {
+                    // respond to PING frame with PONG frame
+                    session.pong(&msg).await.unwrap();
+                }
+
+                _ => {}
+            }
+        }
+    });
+
+    // respond immediately with response connected to WS session
+    Ok(res)
 }

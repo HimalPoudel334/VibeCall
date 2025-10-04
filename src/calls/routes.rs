@@ -4,6 +4,7 @@ use actix_web::web;
 pub fn call_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/call")
+            .service(handlers::echo)
             .service(handlers::create_call)
             .service(handlers::get_call_by_id)
             .service(handlers::update_call_status)
@@ -19,4 +20,3 @@ pub fn call_routes(cfg: &mut web::ServiceConfig) {
             .service(handlers::count_active_participants),
     );
 }
-
