@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-use crate::{calls::contract::PublicUser, shared::response::AppError, users::User};
+use crate::shared::response::AppError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "text", rename_all = "snake_case")]
@@ -24,7 +24,7 @@ impl FromStr for CallStatus {
         match s {
             "initiated" => Ok(CallStatus::Initiated),
             "ringing" => Ok(CallStatus::Ringing),
-            "active" => Ok(CallStatus::Missed),
+            "active" => Ok(CallStatus::Active),
             "ended" => Ok(CallStatus::Ended),
             "missed" => Ok(CallStatus::Missed),
             "rejected" => Ok(CallStatus::Rejected),
@@ -71,44 +71,38 @@ pub struct CallParticipant {
     pub duration: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum SignalingMessage {
-    // User wants to join the call
     #[serde(rename = "join")]
     Join { room_id: String, user_id: i32 },
 
-    // WebRTC offer (initiating connection)
-    #[serde(rename = "offer")]
-    Offer {
-        to_user_id: i32,
-        sdp: String, // Session Description Protocol
-    },
-
-    // WebRTC answer (accepting connection)
-    #[serde(rename = "answer")]
-    Answer { to_user_id: i32, sdp: String },
-
-    // ICE candidates (network routing info)
-    #[serde(rename = "ice-candidate")]
-    IceCandidate { to_user_id: i32, candidate: String },
-
-    // User leaving call
     #[serde(rename = "leave")]
     Leave { room_id: String },
+
+    #[serde(rename = "offer")]
+    Offer { target_user_id: i32, sdp: String },
+
+    #[serde(rename = "answer")]
+    Answer { target_user_id: i32, sdp: String },
+
+    #[serde(rename = "ice_candidate")]
+    IceCandidate {
+        target_user_id: i32,
+        candidate: String,
+        sdp_mid: Option<String>,
+        sdp_m_line_index: Option<u16>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
     #[serde(rename = "user-joined")]
-    UserJoined { user: PublicUser, users: Vec<User> },
+    UserJoined { user_id: i32, users: Vec<i32> },
 
     #[serde(rename = "user-left")]
-    UserLeft {
-        user_id: i32,
-        users: Vec<PublicUser>,
-    }, 
+    UserLeft { user_id: i32 },
 
     #[serde(rename = "offer")]
     Offer { from: i32, sdp: String },

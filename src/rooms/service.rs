@@ -211,6 +211,7 @@ impl RoomService for RoomServiceImpl {
             .count_active_members(room_id)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
+
         if count >= room.max_participants as i64 {
             return Err(AppError::Validation(format!(
                 "Room {} is full (max {})",

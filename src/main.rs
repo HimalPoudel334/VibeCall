@@ -3,7 +3,8 @@ use std::sync::Arc;
 use actix_files::Files;
 use actix_web::{App, HttpServer, web::Data};
 use vibecall::{
-    calls, infrastructure, rooms,
+    calls::{self, SignalingServer},
+    infrastructure, rooms,
     shared::file_service::{FileService, LocalFileService},
     users,
 };
@@ -45,6 +46,11 @@ async fn main() -> std::io::Result<()> {
         user_service.clone(),
     ));
 
+    let signaling_server = Arc::new(SignalingServer::new(
+        call_service.clone(),
+        room_service.clone(),
+    ));
+
     println!("Server started on {}:{}", server_address, server_port);
 
     HttpServer::new(move || {
@@ -58,6 +64,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(user_service.clone()))
             .app_data(Data::new(room_service.clone()))
             .app_data(Data::new(call_service.clone()))
+            .app_data(Data::new(signaling_server.clone()))
             .configure(users::routes::user_routes)
             .configure(infrastructure::routes::infrastructure_routes)
             .configure(rooms::routes::room_routes)

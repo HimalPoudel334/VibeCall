@@ -63,6 +63,10 @@ impl SignalingServer {
         let call_id = if let Some(active_call) =
             active_calls.iter().find(|c| c.status == CallStatus::Active)
         {
+            self.call_service
+                .add_call_participant(active_call.id, user_id)
+                .await?;
+
             active_call.id
         } else {
             let call = self
@@ -71,10 +75,6 @@ impl SignalingServer {
                 .await?;
             call.id
         };
-
-        self.call_service
-            .add_call_participant(call_id, user_id)
-            .await?;
 
         if let Some(mut connection) = self.connections.get_mut(&user_id) {
             connection.call_id = Some(call_id);
@@ -95,11 +95,11 @@ impl SignalingServer {
                     .remove_call_participant(call_id, user_id)
                     .await;
             }
-
-            let _ = self
-                .room_service
-                .leave_room(&connection.room_id, user_id)
-                .await;
+            //
+            // let _ = self
+            //     .room_service
+            //     .leave_room(&connection.room_id, user_id)
+            //     .await;
         }
     }
 

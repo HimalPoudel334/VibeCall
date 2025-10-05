@@ -9,3 +9,4 @@ pub mod websocket;
 
 pub use repository::{CallRepository, SqliteCallRepository};
 pub use service::{CallService, CallServiceImpl};
+pub use signalling_server::SignalingServer;

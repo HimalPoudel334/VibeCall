@@ -1,13 +1,16 @@
-use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, web};
-use actix_ws::{CloseReason, Message, MessageStream, handle};
-use futures::{StreamExt, TryStreamExt};
+use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, get, rt, web};
+use actix_ws::{AggregatedMessage, CloseReason, handle};
+use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-use crate::calls::{
-    contract::UserIdParam,
-    entities::{ServerMessage, SignalingMessage},
-    signalling_server::SignalingServer,
+use crate::{
+    calls::{
+        contract::UserIdParam,
+        entities::{ServerMessage, SignalingMessage},
+        signalling_server::SignalingServer,
+    },
+    shared::response::AppError,
 };
 
 #[derive(Debug)]
@@ -16,165 +19,198 @@ pub enum OutgoingMessage {
     Binary(Vec<u8>),
     Close(Option<CloseReason>),
 }
-/*
+
+#[get("rooms/{room_id}")]
 pub async fn websocket_handler(
     req: HttpRequest,
     stream: web::Payload,
-    user: web::Json<UserIdParam>,
+    user: web::Query<UserIdParam>,
     room_id: web::Path<String>,
     server: web::Data<Arc<SignalingServer>>,
 ) -> ActixResult<HttpResponse> {
+    println!("Hit by client");
     let room_id = room_id.into_inner();
-    let user_id = user.user_id.clone();
+    let user_id = user.user_id;
 
-    // Establish WebSocket connection
-    let (response, mut session, msg_stream) = handle(&req, stream)?;
+    println!("room_id: {room_id} and user_id: {user_id}");
 
-    // Convert low-level stream into aggregated message stream
+    let (response, session, msg_stream) = handle(&req, stream)?;
+
     let mut msg_stream = msg_stream
         .aggregate_continuations()
         .max_continuation_size(2_usize.pow(20));
 
-    // Create a channel for outgoing messages
     let (tx, mut rx): (
         UnboundedSender<OutgoingMessage>,
         UnboundedReceiver<OutgoingMessage>,
     ) = unbounded_channel();
 
-    // Register the connection with the signaling server
-    server.add_connection(user_id.clone(), room_id.clone(), tx.clone());
+    if let Err(e) = server
+        .add_connection(user_id, room_id.clone(), tx.clone())
+        .await
+    {
+        eprintln!("[{}] Failed to add connection: {:?}", user_id, e);
+        return Err(AppError::InternalServerError(e.to_string()).into());
+    }
 
-    // Task to handle outgoing messages
     let mut session_clone = session.clone();
+    let user_id_clone = user_id;
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             match msg {
                 OutgoingMessage::Text(text) => {
                     if let Err(e) = session_clone.text(text).await {
-                        eprintln!("[{}] Send text error: {:?}", user_id, e);
+                        eprintln!("[{}] Send text error: {:?}", user_id_clone, e);
+                        break;
                     }
                 }
                 OutgoingMessage::Binary(bin) => {
                     if let Err(e) = session_clone.binary(bin).await {
-                        eprintln!("[{}] Send binary error: {:?}", user_id, e);
+                        eprintln!("[{}] Send binary error: {:?}", user_id_clone, e);
+                        break;
                     }
                 }
                 OutgoingMessage::Close(reason) => {
                     let _ = session_clone.close(reason).await;
+                    break;
                 }
             }
         }
     });
 
-    // Task to handle incoming messages
     let server_clone = server.get_ref().clone();
-    tokio::spawn(async move {
-        while let Some(msg) = msg_stream.try_next().await.transpose() {
+    let tx_for_send = tx.clone();
+    rt::spawn(async move {
+        while let Some(msg) = msg_stream.next().await {
             match msg {
-                Ok(actix_ws::AggregatedMessage::Text(text)) => {
+                Ok(AggregatedMessage::Text(text)) => {
                     println!("[{}] Received text: {}", user_id, text);
+                    if let Err(e) =
+                        handle_text_message(user_id, &room_id, &text, &server_clone, &tx_for_send)
+                            .await
+                    {
+                        eprintln!("[{}] Error handling text message: {}", user_id, e);
+                        let error_msg = ServerMessage::Error {
+                            message: e.to_string(),
+                        };
+                        if let Ok(json) = serde_json::to_string(&error_msg) {
+                            let _ = tx_for_send.send(OutgoingMessage::Text(json));
+                        }
+                    }
                 }
-                Ok(actix_ws::AggregatedMessage::Binary(bin)) => {
+                Ok(AggregatedMessage::Binary(_bin)) => {
                     println!("[{}] Received binary message", user_id);
                 }
-                Ok(actix_ws::AggregatedMessage::Ping(ping)) => {
-                    let _ = session.pong(&ping).await;
+                Ok(AggregatedMessage::Ping(_ping)) => {}
+                Ok(AggregatedMessage::Close(_reason)) => {
+                    println!("[{}] WebSocket close received", user_id);
+                    break;
                 }
-                Ok(actix_ws::AggregatedMessage::Close(reason)) => {
-                    let _ = session.close(reason).await;
-                }
-                Ok(actix_ws::AggregatedMessage::Pong(pong)) => {
-                    let _ = session.pong(&pong).await;
-                }
+                Ok(AggregatedMessage::Pong(_)) => {}
                 Err(e) => {
                     eprintln!("[{}] WebSocket error: {:?}", user_id, e);
+                    break;
                 }
             }
         }
 
-        // Client disconnected
-        server_clone.remove_connection(user_id);
+        println!("[{}] Connection closed, cleaning up", user_id);
+        server_clone.remove_connection(user_id).await;
+
+        let message = ServerMessage::UserLeft { user_id };
+        if let Ok(json) = serde_json::to_string(&message) {
+            server_clone.broadcast_to_room(&room_id, user_id, &json);
+        }
     });
 
     Ok(response)
 }
 
-async fn handle_websocket_messages(
-    user_id: i32,
-    room_id: String,
-    mut session: actix_ws::Session,
-    mut msg_stream: MessageStream,
-    server: Arc<SignalingServer>,
-) {
-    while let Some(msg) = msg_stream.next().await {
-        match msg {
-            Ok(Message::Text(text)) => {
-                if let Err(e) =
-                    handle_text_message(user_id, &room_id, &text, &server, &mut session).await
-                {
-                    eprintln!("eprintln handling text message: {}", e);
-                    let error_msg = ServerMessage::Error {
-                        message: e.to_string(),
-                    };
-                    if let Ok(json) = serde_json::to_string(&error_msg) {
-                        let _ = session.text(json).await;
-                    }
-                }
-            }
-            Ok(Message::Close(_)) => {
-                println!("WebSocket closed for user {}", user_id);
-                break;
-            }
-            Ok(Message::Ping(bytes)) => {
-                let _ = session.pong(&bytes).await;
-            }
-            Ok(_) => {
-                // Ignore other message types
-            }
-            Err(e) => {
-                eprintln!("WebSocket eprintln for user {}: {}", user_id, e);
-                break;
-            }
-        }
-    }
-
-    // Clean up connection
-    server.remove_connection(user_id);
-    println!("Cleaned up connection for user {}", user_id);
-}
-
 async fn handle_text_message(
     user_id: i32,
-    room_id: &str,
+    _room_id: &str,
     text: &str,
     server: &Arc<SignalingServer>,
-    session: &mut actix_ws::Session,
+    tx: &UnboundedSender<OutgoingMessage>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let message: SignalingMessage = serde_json::from_str(text)?;
+    println!("Signaling message is {:?}", message);
 
-    match &message {
-        SignalingMessage::Join { room_id, user_id } => {
-            let user = server.join_call(*user_id, room_id.to_string()).await?;
+    match message {
+        SignalingMessage::Join {
+            room_id: msg_room_id,
+            user_id: msg_user_id,
+        } => {
+            let call_id = server.join_call(msg_user_id, msg_room_id.clone()).await?;
 
-            // // Send current users list to the new user
-            // let response = ServerMessage::UserJoined {
-            //     user: users.iter().find(|u| u.id == *user_id).unwrap().clone(),
-            //     users,
-            // };
-            //
-            let users = server.get_room_users(&room_id);
+            let users = server.get_room_users(&msg_room_id).await;
 
+            let response = ServerMessage::UserJoined {
+                user_id: msg_user_id,
+                users: users.clone(),
+            };
             let json = serde_json::to_string(&response)?;
-            session.text(json).await?;
+            tx.send(OutgoingMessage::Text(json))
+                .map_err(|e| format!("Failed to send message: {}", e))?;
+
+            let broadcast_msg = ServerMessage::UserJoined {
+                user_id: msg_user_id,
+                users: users.clone(),
+            };
+            let broadcast_json = serde_json::to_string(&broadcast_msg)?;
+            server.broadcast_to_room(&msg_room_id, msg_user_id, &broadcast_json);
+
+            println!(
+                "[{}] Joined call {} in room {}",
+                msg_user_id, call_id, msg_room_id
+            );
         }
+
         SignalingMessage::Leave { room_id } => {
-            server.remove_connection(user_id);
+            server.remove_connection(user_id).await;
+
+            let message = ServerMessage::UserLeft { user_id };
+            if let Ok(json) = serde_json::to_string(&message) {
+                server.broadcast_to_room(&room_id, user_id, &json);
+            }
         }
-        _ => {
-            server.handle_signaling_message(user_id, message)?;
+
+        SignalingMessage::Offer {
+            target_user_id,
+            sdp,
+        } => {
+            let message = ServerMessage::Offer { from: user_id, sdp };
+            let json = serde_json::to_string(&message)?;
+            server.send_to_user(target_user_id, &json)?;
+            println!("[{}] Sent offer to [{}]", user_id, target_user_id);
+        }
+
+        SignalingMessage::Answer {
+            target_user_id,
+            sdp,
+        } => {
+            let message = ServerMessage::Answer { from: user_id, sdp };
+            let json = serde_json::to_string(&message)?;
+            server.send_to_user(target_user_id, &json)?;
+            println!("[{}] Sent answer to [{}]", user_id, target_user_id);
+        }
+
+        SignalingMessage::IceCandidate {
+            target_user_id,
+            candidate,
+            sdp_mid,
+            sdp_m_line_index,
+        } => {
+            let message = ServerMessage::IceCandidate {
+                from: user_id,
+                candidate,
+                sdp_mid,
+                sdp_m_line_index,
+            };
+            let json = serde_json::to_string(&message)?;
+            server.send_to_user(target_user_id, &json)?;
         }
     }
 
     Ok(())
 }
-*/
