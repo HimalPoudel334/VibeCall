@@ -29,6 +29,8 @@ pub trait CallService: Send + Sync {
 
     async fn get_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError>;
 
+    async fn get_active_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError>;
+
     async fn get_calls_by_user_id(&self, user_id: i32) -> Result<Vec<Call>, AppError>;
 
     async fn get_user_participated_calls(&self, user_id: i32) -> Result<Vec<Call>, AppError>;
@@ -183,6 +185,15 @@ impl CallService for CallServiceImpl {
             .ok_or_else(|| AppError::NotFound(format!("Room {} not found", room_id)))?;
 
         self.call_repo.get_calls_by_room_id(room_id).await
+    }
+
+    async fn get_active_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError> {
+        self.room_service
+            .get_room(room_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Room {} not found", room_id)))?;
+
+        self.call_repo.get_active_calls_by_room_id(room_id).await
     }
 
     async fn get_calls_by_user_id(&self, user_id: i32) -> Result<Vec<Call>, AppError> {

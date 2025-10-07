@@ -200,10 +200,7 @@ impl RoomService for RoomServiceImpl {
             .ok_or_else(|| AppError::NotFound(format!("Room {} not found", room_id)))?;
 
         if self.is_user_in_room(room_id, user_id).await? {
-            return Err(AppError::Validation(format!(
-                "User {} already in room {}",
-                user_id, room_id
-            )));
+            return Ok(());
         }
 
         let count = self

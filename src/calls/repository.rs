@@ -24,6 +24,8 @@ pub trait CallRepository {
     // Room-based queries
     async fn get_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError>;
 
+    async fn get_active_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError>;
+
     // User-based queries
     async fn get_calls_by_user_id(&self, user_id: i32) -> Result<Vec<Call>, AppError>;
 
@@ -122,6 +124,17 @@ impl CallRepository for SqliteCallRepository {
     async fn get_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError> {
         let calls = sqlx::query_as::<_, Call>(
             "SELECT * FROM calls WHERE room_id = $1 ORDER BY started_at DESC",
+        )
+        .bind(room_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(calls)
+    }
+
+    async fn get_active_calls_by_room_id(&self, room_id: &str) -> Result<Vec<Call>, AppError> {
+        let calls = sqlx::query_as::<_, Call>(
+            "SELECT * FROM calls WHERE room_id = $1 AND status = 'active' ORDER BY started_at DESC",
         )
         .bind(room_id)
         .fetch_all(&self.pool)

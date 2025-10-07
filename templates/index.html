@@ -254,7 +254,7 @@
         async function connect() {
             userId = parseInt(document.getElementById('userId').value);
             roomId = document.getElementById('roomId').value;
-            const serverUrl = "wss://himalpoudel.name.np/vibecall/call/ws/rooms";
+            const serverUrl = "ws://localhost:8085/call/ws/rooms";
 
             if (!userId || !roomId) {
                 alert('Please enter User ID and Room ID');
@@ -263,7 +263,7 @@
 
             try {
                 const turnResponse = await fetch(
-                    `https://himalpoudel.name.np/vibecall/turn-credentials?user_id=${userId}`
+                    `http://localhost:8085/turn-credentials?user_id=${userId}`
                 );
                 const turnConfig = await turnResponse.json();
 

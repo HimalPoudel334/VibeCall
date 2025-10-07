@@ -58,11 +58,12 @@ impl SignalingServer {
     }
 
     pub async fn join_call(&self, user_id: i32, room_id: String) -> Result<i32, AppError> {
-        let active_calls = self.call_service.get_calls_by_room_id(&room_id).await?;
+        let active_calls = self
+            .call_service
+            .get_active_calls_by_room_id(&room_id)
+            .await?;
 
-        let call_id = if let Some(active_call) =
-            active_calls.iter().find(|c| c.status == CallStatus::Active)
-        {
+        let call_id = if let Some(active_call) = active_calls.first() {
             self.call_service
                 .add_call_participant(active_call.id, user_id)
                 .await?;
