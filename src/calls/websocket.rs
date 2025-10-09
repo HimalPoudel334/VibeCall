@@ -34,7 +34,7 @@ pub async fn websocket_handler(
 
     println!("room_id: {room_id} and user_id: {user_id}");
 
-    let (response, session, msg_stream) = handle(&req, stream)?;
+    let (response, mut session, msg_stream) = handle(&req, stream)?;
 
     let mut msg_stream = msg_stream
         .aggregate_continuations()
@@ -53,48 +53,44 @@ pub async fn websocket_handler(
         return Err(AppError::InternalServerError(e.to_string()).into());
     }
 
-    let mut session_clone = session.clone();
     let user_id_clone = user_id;
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             match msg {
                 OutgoingMessage::Text(text) => {
-                    if let Err(e) = session_clone.text(text).await {
+                    if let Err(e) = session.text(text).await {
                         eprintln!("[{}] Send text error: {:?}", user_id_clone, e);
                         break;
                     }
                 }
                 OutgoingMessage::Binary(bin) => {
-                    if let Err(e) = session_clone.binary(bin).await {
+                    if let Err(e) = session.binary(bin).await {
                         eprintln!("[{}] Send binary error: {:?}", user_id_clone, e);
                         break;
                     }
                 }
                 OutgoingMessage::Close(reason) => {
-                    let _ = session_clone.close(reason).await;
+                    let _ = session.close(reason).await;
                     break;
                 }
             }
         }
     });
 
-    let server_clone = server.get_ref().clone();
-    let tx_for_send = tx.clone();
     rt::spawn(async move {
         while let Some(msg) = msg_stream.next().await {
             match msg {
                 Ok(AggregatedMessage::Text(text)) => {
                     println!("[{}] Received text: {}", user_id, text);
                     if let Err(e) =
-                        handle_text_message(user_id, &room_id, &text, &server_clone, &tx_for_send)
-                            .await
+                        handle_text_message(user_id, &room_id, &text, server.get_ref(), &tx).await
                     {
                         eprintln!("[{}] Error handling text message: {}", user_id, e);
                         let error_msg = ServerMessage::Error {
                             message: e.to_string(),
                         };
                         if let Ok(json) = serde_json::to_string(&error_msg) {
-                            let _ = tx_for_send.send(OutgoingMessage::Text(json));
+                            let _ = tx.send(OutgoingMessage::Text(json));
                         }
                     }
                 }
@@ -115,11 +111,11 @@ pub async fn websocket_handler(
         }
 
         println!("[{}] Connection closed, cleaning up", user_id);
-        server_clone.remove_connection(user_id).await;
+        server.remove_connection(user_id).await;
 
         let message = ServerMessage::UserLeft { user_id };
         if let Ok(json) = serde_json::to_string(&message) {
-            server_clone.broadcast_to_room(&room_id, user_id, &json);
+            server.broadcast_to_room(&room_id, user_id, &json);
         }
     });
 

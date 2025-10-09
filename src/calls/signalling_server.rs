@@ -96,7 +96,7 @@ impl SignalingServer {
                     .remove_call_participant(call_id, user_id)
                     .await;
             }
-            //
+
             // let _ = self
             //     .room_service
             //     .leave_room(&connection.room_id, user_id)
