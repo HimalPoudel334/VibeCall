@@ -1,11 +1,17 @@
-use actix_files::NamedFile;
-use actix_web::{HttpResponse, Responder, get, web};
+use actix_web::{HttpResponse, Responder, get, http::header::ContentType, web};
 use base64::{Engine as _, engine::general_purpose};
 use hmac::{Hmac, Mac};
 use serde_json::json;
 use sha1::Sha1;
+use tera::Context;
 
-use crate::infrastructure::contract::{TurnCredentials, UserIdQuery};
+use crate::{
+    infrastructure::{
+        contract::{TurnCredentials, UserIdQuery},
+        templates::TEMPLATES,
+    },
+    shared::response::AppError,
+};
 
 #[get("/health")]
 pub async fn health_check() -> actix_web::Result<HttpResponse> {
@@ -17,8 +23,17 @@ pub async fn health_check() -> actix_web::Result<HttpResponse> {
 }
 
 #[get("/")]
-pub async fn index() -> actix_web::Result<NamedFile> {
-    Ok(NamedFile::open("templates/index.html")?)
+pub async fn index() -> actix_web::Result<HttpResponse> {
+    let mut context = Context::new();
+    context.insert("title", "Home Page");
+
+    let rendered = TEMPLATES
+        .render("index.html", &context)
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    Ok(HttpResponse::Ok()
+        .content_type(ContentType::html())
+        .body(rendered))
 }
 
 #[get("/turn-credentials")]

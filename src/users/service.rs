@@ -1,5 +1,10 @@
 use crate::{
-    shared::{file_service::FileService, response::AppError, utils},
+    shared::{
+        base_types::{email::Email, phone_number::PhoneNumber},
+        file_service::FileService,
+        response::AppError,
+        utils,
+    },
     users::{entities::User, repository::UserRepository},
 };
 use async_trait::async_trait;
@@ -27,6 +32,8 @@ pub trait UserService: Send + Sync {
         original_file_name: Option<String>,
         file_service: Arc<dyn FileService>,
     ) -> Result<User, AppError>;
+
+    async fn authenticate(&self, email: &str, password: &str) -> Result<User, AppError>;
 }
 
 pub struct UserServiceImpl {
@@ -132,5 +139,48 @@ impl UserService for UserServiceImpl {
                 Err(e)
             }
         }
+    }
+
+    async fn authenticate(&self, username: &str, password: &str) -> Result<User, AppError> {
+        if username.is_empty() || password.is_empty() {
+            return Err(AppError::Validation("Invalid Username or Password".into()));
+        }
+
+        let user = if let Ok(email) = Email::try_from(username) {
+            self.repository.get_by_email(email.get_email()).await?
+        } else if let Ok(phone) = PhoneNumber::try_from(username) {
+            self.repository.get_by_phone(phone.get_number()).await?
+        } else {
+            return Err(AppError::Validation(
+                "Invalid Username or Password".to_string(),
+            ));
+        };
+
+        if user.is_none() {
+            return Err(AppError::Unauthorized(
+                "Invalid Username or Password".to_string(),
+            ));
+        }
+
+        let user = user.unwrap();
+
+        if !utils::verify_password_hash(password, &user.password) {
+            return Err(AppError::InternalServerError(
+                "Invalid Username or Password".to_string(),
+            ));
+        }
+
+        let user = User {
+            id: user.id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email: user.email,
+            phone: user.phone,
+            avatar_url: user.avatar_url,
+            created_at: user.created_at,
+            last_seen: user.last_seen,
+        };
+
+        Ok(user)
     }
 }

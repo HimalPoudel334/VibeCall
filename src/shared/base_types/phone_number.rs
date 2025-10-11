@@ -7,17 +7,19 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Deserialize)]
-#[serde(try_from = "String")]
+#[serde(try_from = "&str")]
 pub struct PhoneNumber {
     phone_number: String,
 }
 
-impl TryFrom<String> for PhoneNumber {
+impl TryFrom<&str> for PhoneNumber {
     type Error = &'static str;
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        if PHONE_NUMBER_REGEX.is_match(s.as_str()) {
-            Ok(PhoneNumber { phone_number: s })
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if PHONE_NUMBER_REGEX.is_match(s) {
+            Ok(PhoneNumber {
+                phone_number: s.to_lowercase().to_string(),
+            })
         } else {
             Err("Invalid phone number format")
         }

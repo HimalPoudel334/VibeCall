@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Login - VibeCall{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/login.css">
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <form id="loginForm" action="/auth/login" method="POST">
+        <h2>Welcome Back</h2>
+        <div class="input-group">
+            <label for="username">Email or Phone</label>
+            <input type="text" id="username" name="username" required placeholder="Enter email or phone number">
+        </div>
+        <div class="input-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required placeholder="Enter your password">
+        </div>
+        <button type="submit">Login</button>
+        <div id="message"></div>
+        <div class="register-link">
+            Do not have an account? <a href="#">Register here</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- <script src="/static/js/login.js"></script> -->
+{% endblock %}

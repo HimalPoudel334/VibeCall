@@ -1,6 +1,9 @@
 use crate::{
     shared::response::AppError,
-    users::{self, entities::User},
+    users::{
+        self,
+        entities::{User, UserWithPassword},
+    },
 };
 use async_trait::async_trait;
 
@@ -8,8 +11,8 @@ use async_trait::async_trait;
 pub trait UserRepository {
     async fn get_by_id(&self, id: i32) -> Result<Option<User>, AppError>;
     async fn create(&self, user: users::entities::NewUser) -> Result<User, AppError>;
-    async fn get_by_email(&self, email: &str) -> Result<Option<User>, AppError>;
-    async fn get_by_phone(&self, phone: &str) -> Result<Option<User>, AppError>;
+    async fn get_by_email(&self, email: &str) -> Result<Option<UserWithPassword>, AppError>;
+    async fn get_by_phone(&self, phone: &str) -> Result<Option<UserWithPassword>, AppError>;
     async fn update_avatar(&self, user_id: i32, avatar_url: &str) -> Result<User, AppError>;
 }
 
@@ -72,8 +75,8 @@ impl UserRepository for SqliteUserRepository {
         Ok(created_user)
     }
 
-    async fn get_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
-        let user = sqlx::query_as::<_, User>(
+    async fn get_by_email(&self, email: &str) -> Result<Option<UserWithPassword>, AppError> {
+        let user = sqlx::query_as::<_, UserWithPassword>(
             r#"
             SELECT 
                 id, 
@@ -82,6 +85,7 @@ impl UserRepository for SqliteUserRepository {
                 email, 
                 phone,
                 avatar_url,
+                password,
                 created_at, 
                 last_seen 
             FROM users 
@@ -94,8 +98,8 @@ impl UserRepository for SqliteUserRepository {
         Ok(user)
     }
 
-    async fn get_by_phone(&self, phone: &str) -> Result<Option<User>, AppError> {
-        let user = sqlx::query_as::<_, User>(
+    async fn get_by_phone(&self, phone: &str) -> Result<Option<UserWithPassword>, AppError> {
+        let user = sqlx::query_as::<_, UserWithPassword>(
             r#"
             SELECT 
                 id, 
@@ -104,6 +108,7 @@ impl UserRepository for SqliteUserRepository {
                 email, 
                 phone,
                 avatar_url,
+                password,
                 created_at, 
                 last_seen 
             FROM users 

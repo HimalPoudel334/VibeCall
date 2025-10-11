@@ -70,3 +70,16 @@ impl NewUser {
         }
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
+pub struct UserWithPassword {
+    pub id: i32,
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    pub phone: String,
+    pub avatar_url: String,
+    pub password: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub last_seen: chrono::NaiveDateTime,
+}

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use actix_files::Files;
 use actix_web::{App, HttpServer, web::Data};
 use vibecall::{
+    auth,
     calls::{self, SignalingServer},
     infrastructure, rooms,
     shared::file_service::{FileService, LocalFileService},
@@ -65,12 +66,13 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(room_service.clone()))
             .app_data(Data::new(call_service.clone()))
             .app_data(Data::new(signaling_server.clone()))
+            .configure(auth::routes::auth_routes)
             .configure(users::routes::user_routes)
             .configure(infrastructure::routes::infrastructure_routes)
             .configure(rooms::routes::room_routes)
             .configure(calls::routes::call_routes)
             .service(
-                Files::new("/media", "./media")
+                Files::new("/static", "./static")
                     .use_last_modified(true)
                     .prefer_utf8(true)
                     .use_etag(true) // Better caching
