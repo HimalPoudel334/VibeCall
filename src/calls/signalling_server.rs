@@ -18,7 +18,7 @@ pub struct Connection {
 
 pub struct SignalingServer {
     connections: DashMap<i32, Connection>,
-    rooms: DashMap<String, Vec<i32>>,
+    rooms: DashMap<String, Vec<(i32, String)>>,
 
     call_service: Arc<dyn CallService>,
     room_service: Arc<dyn RoomService>,
@@ -50,7 +50,12 @@ impl SignalingServer {
 
         self.connections.insert(user_id, connection);
 
-        self.rooms.entry(room_id.clone()).or_default().push(user_id);
+        let user = self.call_service.get_caller_info(user_id).await?;
+
+        self.rooms
+            .entry(room_id.clone())
+            .or_default()
+            .push((user_id, user.1));
 
         self.room_service.join_room(&room_id, user_id).await?;
 
@@ -87,7 +92,7 @@ impl SignalingServer {
     pub async fn remove_connection(&self, user_id: i32) {
         if let Some((_, connection)) = self.connections.remove(&user_id) {
             if let Some(mut room_users) = self.rooms.get_mut(&connection.room_id) {
-                room_users.retain(|&id| id != user_id);
+                room_users.retain(|(id, _)| *id != user_id);
             }
 
             if let Some(call_id) = connection.call_id {
@@ -97,6 +102,7 @@ impl SignalingServer {
                     .await;
             }
 
+            // Uncomment if needed
             // let _ = self
             //     .room_service
             //     .leave_room(&connection.room_id, user_id)
@@ -119,18 +125,22 @@ impl SignalingServer {
 
     pub fn broadcast_to_room(&self, room_id: &str, sender_id: i32, message: &str) {
         if let Some(room_users) = self.rooms.get(room_id) {
-            for &user_id in room_users.iter() {
-                if user_id != sender_id {
-                    let _ = self.send_to_user(user_id, message);
+            for (id, _) in room_users.iter() {
+                if *id != sender_id {
+                    let _ = self.send_to_user(*id, message);
                 }
             }
         }
     }
 
-    pub async fn get_room_users(&self, room_id: &str) -> Vec<i32> {
+    pub async fn get_room_users(&self, room_id: &str) -> Vec<(i32, String)> {
         self.rooms
             .get(room_id)
-            .map(|users| users.clone())
+            .map(|entry| entry.value().clone())
             .unwrap_or_default()
+    }
+
+    pub async fn get_caller_info(&self, user_id: i32) -> Result<(i32, String), AppError> {
+        self.call_service.get_caller_info(user_id).await
     }
 }

@@ -143,7 +143,7 @@ impl UserService for UserServiceImpl {
 
     async fn authenticate(&self, username: &str, password: &str) -> Result<User, AppError> {
         if username.is_empty() || password.is_empty() {
-            return Err(AppError::Validation("Invalid Username or Password".into()));
+            return Err(AppError::Validation("Invalid Username or Password1".into()));
         }
 
         let user = if let Ok(email) = Email::try_from(username) {
@@ -152,21 +152,21 @@ impl UserService for UserServiceImpl {
             self.repository.get_by_phone(phone.get_number()).await?
         } else {
             return Err(AppError::Validation(
-                "Invalid Username or Password".to_string(),
+                "Invalid Username or Password2".to_string(),
             ));
         };
 
         if user.is_none() {
             return Err(AppError::Unauthorized(
-                "Invalid Username or Password".to_string(),
+                "Invalid Username or Password3".to_string(),
             ));
         }
 
         let user = user.unwrap();
 
-        if !utils::verify_password_hash(password, &user.password) {
+        if !utils::verify_password_hash(&user.password, password) {
             return Err(AppError::InternalServerError(
-                "Invalid Username or Password".to_string(),
+                "Invalid Username or Password4".to_string(),
             ));
         }
 

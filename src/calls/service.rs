@@ -51,6 +51,8 @@ pub trait CallService: Send + Sync {
     async fn count_active_participants(&self, call_id: i32) -> Result<i64, AppError>;
 
     async fn is_user_participant(&self, call_id: i32, user_id: i32) -> Result<bool, AppError>;
+
+    async fn get_caller_info(&self, user_id: i32) -> Result<(i32, String), AppError>;
 }
 
 pub struct CallServiceImpl {
@@ -344,5 +346,16 @@ impl CallService for CallServiceImpl {
             .ok_or_else(|| AppError::NotFound(format!("Call {} not found", call_id)))?;
 
         self.call_repo.is_user_participant(call_id, user_id).await
+    }
+
+    //sinnicle
+    async fn get_caller_info(&self, user_id: i32) -> Result<(i32, String), AppError> {
+        let user = self
+            .user_service
+            .get_by_id(user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+
+        Ok((user.id, format!("{} {}", user.first_name, user.last_name)))
     }
 }

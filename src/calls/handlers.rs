@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
-use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, get, post, rt, web};
+use actix_identity::Identity;
+use actix_web::{
+    HttpRequest, HttpResponse, Result as ActixResult, get, http::header, post, rt, web,
+};
 use actix_ws::AggregatedMessage;
 use futures::StreamExt;
 
 use crate::{
     calls::{
         CallService,
-        contract::{NewCall, UpdateCallStatus, UserIdParam},
+        contract::{NewCall, UpdateCallStatus},
     },
     shared::response::{AppError, respond_ok},
 };
@@ -59,11 +62,23 @@ pub async fn update_call_status(
 #[post("/{call_id}/end")]
 pub async fn end_call(
     call_id: web::Path<i32>,
-    user_id: web::Json<UserIdParam>,
+    identity: Option<Identity>,
     call_service: web::Data<Arc<dyn CallService>>,
 ) -> ActixResult<HttpResponse> {
     let call_id = call_id.into_inner();
-    call_service.end_call(call_id, user_id.user_id).await?;
+    let user_id: i32 = match identity
+        .and_then(|id| id.id().ok())
+        .and_then(|id_str| id_str.parse::<i32>().ok())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .finish());
+        }
+    };
+
+    call_service.end_call(call_id, user_id).await?;
     respond_ok("Call ended successfully")
 }
 
@@ -118,26 +133,52 @@ pub async fn list_call_participants(
 #[post("/{call_id}/participants/add")]
 pub async fn add_call_participant(
     call_id: web::Path<i32>,
-    user_id: web::Json<UserIdParam>,
+    identity: Option<Identity>,
     call_service: web::Data<Arc<dyn CallService>>,
 ) -> ActixResult<HttpResponse> {
+    let user_id: i32 = match identity
+        .and_then(|id| id.id().ok())
+        .and_then(|id_str| id_str.parse::<i32>().ok())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .finish());
+        }
+    };
+
     let call_id = call_id.into_inner();
-    call_service
-        .add_call_participant(call_id, user_id.user_id)
-        .await?;
+
+    call_service.add_call_participant(call_id, user_id).await?;
+
     respond_ok("Participant added successfully")
 }
 
 #[post("/{call_id}/participants/remove")]
 pub async fn remove_call_participant(
     call_id: web::Path<i32>,
-    user_id: web::Json<UserIdParam>,
+    identity: Option<Identity>,
     call_service: web::Data<Arc<dyn CallService>>,
 ) -> ActixResult<HttpResponse> {
+    let user_id: i32 = match identity
+        .and_then(|id| id.id().ok())
+        .and_then(|id_str| id_str.parse::<i32>().ok())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .finish());
+        }
+    };
+
     let call_id = call_id.into_inner();
+
     call_service
-        .remove_call_participant(call_id, user_id.user_id)
+        .remove_call_participant(call_id, user_id)
         .await?;
+
     respond_ok("Participant removed successfully")
 }
 

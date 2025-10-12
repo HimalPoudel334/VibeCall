@@ -1,4 +1,11 @@
-use actix_web::{HttpResponse, Responder, get, http::header::ContentType, web};
+use std::sync::Arc;
+
+use actix_identity::Identity;
+use actix_web::{
+    HttpResponse, get,
+    http::header::{self, ContentType},
+    web,
+};
 use base64::{Engine as _, engine::general_purpose};
 use hmac::{Hmac, Mac};
 use serde_json::json;
@@ -6,11 +13,9 @@ use sha1::Sha1;
 use tera::Context;
 
 use crate::{
-    infrastructure::{
-        contract::{TurnCredentials, UserIdQuery},
-        templates::TEMPLATES,
-    },
-    shared::response::AppError,
+    infrastructure::{contract::TurnCredentials, templates::TEMPLATES},
+    shared::response::{AppError, respond_ok},
+    users::UserService,
 };
 
 #[get("/health")]
@@ -23,9 +28,30 @@ pub async fn health_check() -> actix_web::Result<HttpResponse> {
 }
 
 #[get("/")]
-pub async fn index() -> actix_web::Result<HttpResponse> {
+pub async fn index(
+    identity: Option<Identity>,
+    user_service: web::Data<Arc<dyn UserService>>,
+) -> actix_web::Result<HttpResponse> {
+    let user_id: i32 = match identity
+        .and_then(|id| id.id().ok())
+        .and_then(|id_str| id_str.parse::<i32>().ok())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .finish());
+        }
+    };
+
+    let user = user_service
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
     let mut context = Context::new();
     context.insert("title", "Home Page");
+    context.insert("user", &user);
 
     let rendered = TEMPLATES
         .render("index.html", &context)
@@ -37,12 +63,24 @@ pub async fn index() -> actix_web::Result<HttpResponse> {
 }
 
 #[get("/turn-credentials")]
-pub async fn get_turn_credentials(user_id: web::Query<UserIdQuery>) -> impl Responder {
+pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Result<HttpResponse> {
+    let user_id: i32 = match identity
+        .and_then(|id| id.id().ok())
+        .and_then(|id_str| id_str.parse::<i32>().ok())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .finish());
+        }
+    };
+
     let shared_secret = "MyVerySecretKey12345";
     let ttl = 86400;
 
     let timestamp = chrono::Utc::now().timestamp() + ttl;
-    let username = format!("{}:user{}", timestamp, user_id.user_id);
+    let username = format!("{}:user{}", timestamp, user_id);
 
     let mut mac = Hmac::<Sha1>::new_from_slice(shared_secret.as_bytes())
         .expect("HMAC can take key of any size");
@@ -50,7 +88,7 @@ pub async fn get_turn_credentials(user_id: web::Query<UserIdQuery>) -> impl Resp
     let result = mac.finalize();
     let credential = general_purpose::STANDARD.encode(result.into_bytes());
 
-    HttpResponse::Ok().json(TurnCredentials {
+    respond_ok(TurnCredentials {
         username,
         credential,
         urls: vec![

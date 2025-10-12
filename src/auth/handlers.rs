@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use actix_web::{HttpResponse, get, http::header::ContentType, post, web};
+use actix_identity::Identity;
+use actix_web::{
+    HttpMessage, HttpResponse, Responder, get,
+    http::{StatusCode, header::ContentType},
+    post, web,
+};
 use tera::Context;
 
 use crate::{
@@ -40,19 +45,24 @@ pub async fn register() -> actix_web::Result<HttpResponse> {
 pub async fn login_post(
     data: web::Form<LoginRequest>,
     user_service: web::Data<Arc<dyn UserService>>,
-) -> actix_web::Result<HttpResponse> {
+    req: actix_web::HttpRequest,
+) -> actix_web::Result<impl Responder> {
     let user = user_service
         .authenticate(&data.username, &data.password)
         .await?;
 
-    let mut context = Context::new();
-    context.insert("user", &user);
+    Identity::login(&req.extensions(), user.id.to_string())?;
 
-    let rendered = TEMPLATES
-        .render("index.html", &context)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    Ok(web::Redirect::to("/vibecall").using_status_code(StatusCode::FOUND))
 
-    Ok(HttpResponse::Ok()
-        .content_type(ContentType::html())
-        .body(rendered))
+    // let mut context = Context::new();
+    // context.insert("user", &user);
+    //
+    // let rendered = TEMPLATES
+    //     .render("index.html", &context)
+    //     .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    //
+    // Ok(HttpResponse::Ok()
+    //     .content_type(ContentType::html())
+    //     .body(rendered))
 }

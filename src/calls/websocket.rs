@@ -1,4 +1,5 @@
-use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, get, rt, web};
+use actix_identity::Identity;
+use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, get, http::header, rt, web};
 use actix_ws::{AggregatedMessage, CloseReason, handle};
 use futures::StreamExt;
 use std::sync::Arc;
@@ -6,7 +7,6 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::{
     calls::{
-        contract::UserIdParam,
         entities::{ServerMessage, SignalingMessage},
         signalling_server::SignalingServer,
     },
@@ -24,13 +24,23 @@ pub enum OutgoingMessage {
 pub async fn websocket_handler(
     req: HttpRequest,
     stream: web::Payload,
-    user: web::Query<UserIdParam>,
+    identity: Option<Identity>,
     room_id: web::Path<String>,
     server: web::Data<Arc<SignalingServer>>,
 ) -> ActixResult<HttpResponse> {
     println!("Hit by client");
     let room_id = room_id.into_inner();
-    let user_id = user.user_id;
+    let user_id: i32 = match identity
+        .and_then(|id| id.id().ok())
+        .and_then(|id_str| id_str.parse::<i32>().ok())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .finish());
+        }
+    };
 
     println!("room_id: {room_id} and user_id: {user_id}");
 
@@ -113,7 +123,18 @@ pub async fn websocket_handler(
         println!("[{}] Connection closed, cleaning up", user_id);
         server.remove_connection(user_id).await;
 
-        let message = ServerMessage::UserLeft { user_id };
+        let user = match server.get_caller_info(user_id).await {
+            Ok(user) => user,
+            Err(e) => {
+                eprintln!("[{}] Failed to get caller info: {:?}", user_id, e);
+                return;
+            }
+        };
+
+        let message = ServerMessage::UserLeft {
+            user_id,
+            user_name: user.1,
+        };
         if let Ok(json) = serde_json::to_string(&message) {
             server.broadcast_to_room(&room_id, user_id, &json);
         }
@@ -164,8 +185,12 @@ async fn handle_text_message(
 
         SignalingMessage::Leave { room_id } => {
             server.remove_connection(user_id).await;
+            let user = server.get_caller_info(user_id).await?;
 
-            let message = ServerMessage::UserLeft { user_id };
+            let message = ServerMessage::UserLeft {
+                user_id,
+                user_name: user.1,
+            };
             if let Ok(json) = serde_json::to_string(&message) {
                 server.broadcast_to_room(&room_id, user_id, &json);
             }

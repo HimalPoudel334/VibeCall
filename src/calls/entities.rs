@@ -99,10 +99,13 @@ pub enum SignalingMessage {
 #[serde(tag = "type")]
 pub enum ServerMessage {
     #[serde(rename = "user-joined")]
-    UserJoined { user_id: i32, users: Vec<i32> },
+    UserJoined {
+        user_id: i32,
+        users: Vec<(i32, String)>,
+    },
 
     #[serde(rename = "user-left")]
-    UserLeft { user_id: i32 },
+    UserLeft { user_id: i32, user_name: String },
 
     #[serde(rename = "offer")]
     Offer { from: i32, sdp: String },

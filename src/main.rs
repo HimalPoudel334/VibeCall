@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use actix_files::Files;
-use actix_web::{App, HttpServer, web::Data};
+use actix_identity::IdentityMiddleware;
+use actix_session::{SessionMiddleware, config::PersistentSession, storage::CookieSessionStore};
+use actix_web::{App, HttpServer, cookie::Key, middleware, web::Data};
+use base64::{Engine, engine::general_purpose};
 use vibecall::{
     auth,
     calls::{self, SignalingServer},
@@ -66,11 +69,29 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(room_service.clone()))
             .app_data(Data::new(call_service.clone()))
             .app_data(Data::new(signaling_server.clone()))
-            .configure(auth::routes::auth_routes)
-            .configure(users::routes::user_routes)
-            .configure(infrastructure::routes::infrastructure_routes)
-            .configure(rooms::routes::room_routes)
-            .configure(calls::routes::call_routes)
+            .wrap(IdentityMiddleware::default())
+            .wrap(
+                SessionMiddleware::builder(
+                    CookieSessionStore::default(),
+                    Key::from(
+                        general_purpose::STANDARD
+                            .decode(
+                                "FGzGcz8rEHaq+s4kxViffDuCYXqz5jOXZWwn5wTALk1HQoHv8RgihuWswJzKwFx2buKhui1NfBEX6KmBG67Irg=="
+                                    .trim(),
+                            )
+                            .unwrap()
+                            .as_ref(),
+                    ),
+                )
+                .cookie_name("vibecall".to_owned())
+                .cookie_secure(false)
+                .session_lifecycle(
+                    PersistentSession::default()
+                        .session_ttl(actix_web::cookie::time::Duration::minutes(30)),
+                )
+                .build(),
+            )
+            .wrap(middleware::NormalizePath::trim())
             .service(
                 Files::new("/static", "./static")
                     .use_last_modified(true)
@@ -79,6 +100,11 @@ async fn main() -> std::io::Result<()> {
                     .disable_content_disposition() // Prevent some attacks
                     .index_file("404.html"),
             )
+            .configure(auth::routes::auth_routes)
+            .configure(users::routes::user_routes)
+            .configure(infrastructure::routes::infrastructure_routes)
+            .configure(rooms::routes::room_routes)
+            .configure(calls::routes::call_routes)
     })
     .bind((server_address, server_port))?
     .run()

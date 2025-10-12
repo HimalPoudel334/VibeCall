@@ -8,6 +8,7 @@
     - kept TURN / signaling calls pattern (adjust URL to your server)
 */
 
+
 const configuration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' }
@@ -104,14 +105,15 @@ function removeVideoElement(id) {
     adjustGrid();
 }
 
-// update users list UI
+
 function updateUsersList(users) {
     if (!users || users.length === 0) {
         usersContent.textContent = 'None';
     } else {
-        usersContent.innerHTML = users.map(u =>
-            `<div class="user-item">👤 User ${u}${u === userId ? ' (You)' : ''}</div>`
-        ).join('');
+        usersContent.innerHTML = users.map(u => {
+            const [id, name] = u;
+            return `<div class="user-item">👤 ${name}${id === userId ? ' (You)' : ''}</div>`;
+        }).join('');
     }
 }
 
@@ -128,15 +130,15 @@ function updateStatus(text, connected) {
 }
 
 // connect and join
-async function connect() {
-    userId = parseInt(document.getElementById('userId').value);
+async function connect(uid) {
+    userId = parseInt(uid);
     roomId = document.getElementById('roomId').value;
 
     if (!userId || !roomId) { alert('Please enter User ID and Room ID'); return; }
 
     try {
         // keep your TURN credentials call exactly as you used
-        const turnResponse = await fetch(`https://himalpoudel.name.np/vibecall/turn-credentials?user_id=${userId}`);
+        const turnResponse = await fetch('https://himalpoudel.name.np/vibecall/turn-credentials');
         const turnConfig = await turnResponse.json();
 
         // append TURN server to ICE servers

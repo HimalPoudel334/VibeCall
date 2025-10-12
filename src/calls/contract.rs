@@ -14,11 +14,6 @@ pub struct UpdateCallStatus {
     pub status: String,
 }
 
-#[derive(Deserialize)]
-pub struct UserIdParam {
-    pub user_id: i32,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PublicUser {
     pub id: i32,

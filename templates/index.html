@@ -1,56 +1,51 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block title %}VibeCall - Video Conferencing{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="/vibecall/static/css/index.css">
 {% endblock %}
 
 {% block content %}
-<div class="container" id="joinContainer">
-    <h1>🎥 VibeCall</h1>
+    <div class="container" id="joinContainer">
+        <h1>🎥 VibeCall</h1>
 
-    <div class="input-group">
-        <label>User ID</label>
-        <input id="userId" type="number" value="{{ user.id }}" min="1" disabled />
+        <div class="input-group">
+            <label>Room ID</label>
+            <input id="roomId" type="text" value="d7694d42-2fea-4f14-a086-add07a7bf876" />
+        </div>
+
+        <button id="connectBtn" class="btn btn-primary" onclick="connect('{{ user.id }}')">Connect & Join Call</button>
+        <button id="leaveBtn" class="btn btn-danger" disabled>Leave Call</button>
+
+        <div id="status" class="status disconnected">Disconnected</div>
     </div>
 
-    <div class="input-group">
-        <label>Room ID</label>
-        <input id="roomId" type="text" value="d7694d42-2fea-4f14-a086-add07a7bf876" />
+    <!-- video area shown after join -->
+    <div class="video-container" id="videoContainer">
+        <div class="videos" id="videosGrid"></div>
+
+        <!-- controls inside video area (will be visible after join) -->
+        <div class="controls" id="controlsRow" style="display:none;">
+            <button id="toggleMicBtn" class="circle-btn" title="Toggle Mic" disabled><i id="micIcon"
+                    class="fa-solid fa-microphone"></i></button>
+            <button id="toggleVideoBtn" class="circle-btn" title="Toggle Video" disabled><i id="videoIcon"
+                    class="fa-solid fa-video"></i></button>
+            <button id="flipCameraBtn" class="circle-btn" title="Flip Camera" disabled><i
+                    class="fa-solid fa-camera-rotate"></i></button>
+            <!-- End Call icon -->
+            <button id="endCallBtn" class="circle-btn" title="End Call" style="background:#b91c1c;"><i
+                    class="fa-solid fa-phone"></i></button>
+        </div>
+
+        <div class="users-list" id="usersList">
+            <h3>Connected Users</h3>
+            <div id="usersContent">None</div>
+        </div>
     </div>
-
-    <button id="connectBtn" class="btn btn-primary">Connect & Join Call</button>
-    <button id="leaveBtn" class="btn btn-danger" disabled>Leave Call</button>
-
-    <div id="status" class="status disconnected">Disconnected</div>
-</div>
-
-<!-- video area shown after join -->
-<div class="video-container" id="videoContainer">
-    <div class="videos" id="videosGrid"></div>
-
-    <!-- controls inside video area (will be visible after join) -->
-    <div class="controls" id="controlsRow" style="display:none;">
-        <button id="toggleMicBtn" class="circle-btn" title="Toggle Mic" disabled><i id="micIcon"
-                class="fa-solid fa-microphone"></i></button>
-        <button id="toggleVideoBtn" class="circle-btn" title="Toggle Video" disabled><i id="videoIcon"
-                class="fa-solid fa-video"></i></button>
-        <button id="flipCameraBtn" class="circle-btn" title="Flip Camera" disabled><i
-                class="fa-solid fa-camera-rotate"></i></button>
-        <!-- End Call icon -->
-        <button id="endCallBtn" class="circle-btn" title="End Call" style="background:#b91c1c;"><i
-                class="fa-solid fa-phone"></i></button>
-    </div>
-
-    <div class="users-list" id="usersList">
-        <h3>Connected Users</h3>
-        <div id="usersContent">None</div>
-    </div>
-</div>
 
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/index.js"></script>
+    <script src="/vibecall/static/js/index.js"></script>
 {% endblock %}
