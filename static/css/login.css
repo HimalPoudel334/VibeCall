@@ -1,13 +1,3 @@
-/* Body styling */
-body {
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(to right, #667eea, #764ba2);
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
 /* Login box */
 .login-container {
     background-color: white;

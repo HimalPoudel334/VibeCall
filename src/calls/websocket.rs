@@ -20,7 +20,7 @@ pub enum OutgoingMessage {
     Close(Option<CloseReason>),
 }
 
-#[get("rooms/{room_id}")]
+#[get("/ws/rooms/{room_id}")]
 pub async fn websocket_handler(
     req: HttpRequest,
     stream: web::Payload,

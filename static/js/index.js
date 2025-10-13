@@ -1,18 +1,7 @@
 
-/*
-    Single-file VibeCall:
-    - Multi-peer: one RTCPeerConnection per remote user (peerConnections map)
-    - Responsive square-ish grid (2x2, 3x3, ...) using columns = ceil(sqrt(n))
-    - Flip camera: replace video track in all RTCPeerConnections so remote users see new camera (FIXED)
-    - Mic/Video toggle; End Call to cleanup & return to join UI
-    - kept TURN / signaling calls pattern (adjust URL to your server)
-*/
-
-
 const configuration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' }
-        // TURN will be set after fetching credentials
     ]
 };
 
@@ -44,28 +33,23 @@ const videoIcon = document.getElementById('videoIcon');
 
 const usersContent = document.getElementById('usersContent');
 
-connectBtn.addEventListener('click', connect);
 leaveBtn.addEventListener('click', leave);
 toggleMicBtn.addEventListener('click', toggleMic);
 toggleVideoBtn.addEventListener('click', toggleVideo);
 flipCameraBtn.addEventListener('click', flipCamera);
 endCallBtn.addEventListener('click', leave);
 
-// Utility: adjust grid columns based on participant count
 function adjustGrid() {
-    // count of participants (videos present)
     const count = videosGrid.children.length || 1;
     const cols = Math.ceil(Math.sqrt(count));
     videosGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 }
 
-// Add / update a video element for a given user id
 function addVideoElement(id, stream, label) {
     const vidId = `video-${id}`;
     let videoEl = document.getElementById(vidId);
 
     if (!videoEl) {
-        // create wrapper + video
         const wrapper = document.createElement('div');
         wrapper.className = 'video-wrapper';
         wrapper.id = `wrapper-${id}`;
@@ -74,10 +58,9 @@ function addVideoElement(id, stream, label) {
         videoEl.id = vidId;
         videoEl.autoplay = true;
         videoEl.playsInline = true;
-        videoEl.muted = (id === userId); // mute local preview
+        // videoEl.muted = (id === userId);
         wrapper.appendChild(videoEl);
 
-        // label
         const lbl = document.createElement('div');
         lbl.className = 'video-label';
         lbl.textContent = label || `User ${id}`;
@@ -98,7 +81,6 @@ function addVideoElement(id, stream, label) {
     adjustGrid();
 }
 
-// Remove a video element
 function removeVideoElement(id) {
     const wrapper = document.getElementById(`wrapper-${id}`);
     if (wrapper) wrapper.remove();
@@ -112,12 +94,11 @@ function updateUsersList(users) {
     } else {
         usersContent.innerHTML = users.map(u => {
             const [id, name] = u;
-            return `<div class="user-item">👤 ${name}${id === userId ? ' (You)' : ''}</div>`;
+            return `<div class="user-item">👤 ${name} ${id === userId ? '(You)' : ''}</div>`;
         }).join('');
     }
 }
 
-// Send message helper (only if ws open)
 function sendMessage(msg) {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(msg));
@@ -129,7 +110,6 @@ function updateStatus(text, connected) {
     statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
 }
 
-// connect and join
 async function connect(uid) {
     userId = parseInt(uid);
     roomId = document.getElementById('roomId').value;
@@ -137,48 +117,39 @@ async function connect(uid) {
     if (!userId || !roomId) { alert('Please enter User ID and Room ID'); return; }
 
     try {
-        // keep your TURN credentials call exactly as you used
         const turnResponse = await fetch('https://himalpoudel.name.np/vibecall/turn-credentials');
         const turnConfig = await turnResponse.json();
 
-        // append TURN server to ICE servers
         const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
-        if (turnConfig && turnConfig.urls) {
+        if (turnConfig && turnConfig.data && turnConfig.data.urls) {
             iceServers.push({
-                urls: turnConfig.urls,
-                username: turnConfig.username,
-                credential: turnConfig.credential
+                urls: turnConfig.data.urls,
+                username: turnConfig.data.username,
+                credential: turnConfig.data.credential
             });
         }
-        // NOTE: Configuration for new PCs must be passed in startConnection/handleOffer
 
-        // get media with the requested facing mode
         localStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: currentFacingMode },
             audio: true
         });
 
-        // show UI: hide joinContainer, show videoContainer & controls
         joinContainer.style.display = 'none';
         videoContainer.classList.add('active');
         controlsRow.style.display = 'flex';
 
-        // enable control buttons
         toggleMicBtn.disabled = false;
         toggleVideoBtn.disabled = false;
         flipCameraBtn.disabled = false;
         leaveBtn.disabled = false;
 
-        // add local video element (userId)
-        addVideoElement(userId, localStream, 'You (Local)');
+        addVideoElement(userId, localStream, 'You');
 
-        // connect signaling websocket (your server path)
         const serverUrl = `wss://himalpoudel.name.np/vibecall/call/ws/rooms`;
-        ws = new WebSocket(`${serverUrl}/${roomId}?user_id=${userId}`);
+        ws = new WebSocket(`${serverUrl}/${roomId}`);
 
         ws.onopen = () => {
             updateStatus('Connected', true);
-            // tell server we joined
             sendMessage({ type: 'join', room_id: roomId, user_id: userId });
             connectBtn.disabled = true;
         };
@@ -194,7 +165,6 @@ async function connect(uid) {
 
         ws.onerror = (e) => console.error('WebSocket error', e);
         ws.onclose = () => {
-            // server closed
             cleanup();
         };
 
@@ -204,37 +174,28 @@ async function connect(uid) {
     }
 }
 
-// handle various signaling messages
 async function handleSignalingMessage(msg, iceServers) {
     switch (msg.type) {
         case 'user-joined':
             updateUsersList(msg.users);
 
-            (msg.users || []).forEach(remoteId => {
+            (msg.users || []).forEach(([remoteId, username]) => {
                 if (remoteId === userId) return;
-                // Only initiate connection if PC does not exist
                 if (!peerConnections[remoteId]) {
-                    // Check if *this* user is the initiator (lower ID is the standard initiator)
-                    const isInitiator = userId < remoteId;
-                    if (isInitiator) {
-                        startConnection(remoteId, /*isInitiator=*/ true, iceServers);
-                    }
+                    startConnection(remoteId, username, true, iceServers);
                 }
             });
             break;
 
         case 'offer':
-            // incoming offer: msg.from contains remote user id
             await handleOffer(msg, iceServers);
             break;
 
         case 'answer':
-            // incoming answer to our offer
             {
                 const remoteId = msg.from ?? msg.user_id ?? msg.sender;
                 const pc = peerConnections[remoteId];
                 if (pc) {
-                    // FIX: Check signaling state to avoid InvalidStateError (though offerer should be waiting for answer)
                     if (pc.signalingState !== 'stable') {
                         await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
                     } else {
@@ -284,20 +245,30 @@ async function handleSignalingMessage(msg, iceServers) {
     }
 }
 
-// create a peer connection for a remote user
-function startConnection(remoteId, isInitiator = false, iceServers) {
-    const pc = new RTCPeerConnection({ iceServers: iceServers }); // Pass full config here
+function startConnection(remoteId, label = '', isInitiator = false, iceServers) {
+    const pc = new RTCPeerConnection({ iceServers: iceServers });
     peerConnections[remoteId] = pc;
 
-    // add local tracks
+    // Initialize transceivers to maintain m-line order
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
+    pc.addTransceiver('video', { direction: 'sendrecv' });
+
     if (localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        const audioTrack = localStream.getAudioTracks()[0];
+        const videoTrack = localStream.getVideoTracks()[0];
+
+        const transceivers = pc.getTransceivers();
+        if (audioTrack && transceivers[0]) {
+            transceivers[0].sender.replaceTrack(audioTrack);
+        }
+        if (videoTrack && transceivers[1]) {
+            transceivers[1].sender.replaceTrack(videoTrack);
+        }
     }
 
     pc.ontrack = (ev) => {
-        // show remote stream in grid
         const stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
-        if (stream) addVideoElement(remoteId, stream, `User ${remoteId}`);
+        if (stream) addVideoElement(remoteId, stream, label || `User ${remoteId}`);
     };
 
     pc.onicecandidate = (ev) => {
@@ -312,50 +283,102 @@ function startConnection(remoteId, isInitiator = false, iceServers) {
         }
     };
 
+    let isNegotiating = false;
     pc.onnegotiationneeded = async () => {
-        if (isInitiator && pc.signalingState === 'stable') {
-            try {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                sendMessage({ type: 'offer', target_user_id: remoteId, sdp: offer.sdp });
-            } catch (err) {
-                console.error('onnegotiationneeded failed to create offer', err);
-            }
+        if (!isInitiator || pc.signalingState !== 'stable' || isNegotiating) {
+            return;
+        }
+
+        try {
+            isNegotiating = true;
+            await pc.setLocalDescription();
+            sendMessage({
+                type: 'offer',
+                target_user_id: remoteId,
+                sdp: pc.localDescription.sdp
+            });
+        } catch (err) {
+            console.error('onnegotiationneeded failed to create offer', err);
+        } finally {
+            isNegotiating = false;
+        }
+    };
+
+    // Monitor connection state to detect disconnections
+    pc.oniceconnectionstatechange = () => {
+        console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            console.warn(`Connection to ${remoteId} ${pc.iceConnectionState}. Attempting ICE restart...`);
+            // Optionally trigger ICE restart
+            setTimeout(() => {
+                if (pc.iceConnectionState === 'disconnected' && isInitiator) {
+                    restartIce(remoteId);
+                }
+            }, 3000);
         }
     };
 
     pc.onconnectionstatechange = () => {
-        // console.log('pc state for', remoteId, pc.connectionState);
+        console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
+        if (pc.connectionState === 'failed') {
+            console.error(`Connection to ${remoteId} failed completely.`);
+        }
     };
 
     if (isInitiator) {
-        // Initial offer will be triggered by onnegotiationneeded after tracks are added
-        // Forcing a negotiation needed now if necessary
-        if (pc.signalingState === 'stable') {
-            pc.dispatchEvent(new Event('negotiationneeded'));
-        }
+        setTimeout(() => {
+            if (pc.signalingState === 'stable') {
+                pc.dispatchEvent(new Event('negotiationneeded'));
+            }
+        }, 0);
     }
 
     return pc;
 }
 
-// handle incoming offer
+async function restartIce(remoteId) {
+    const pc = peerConnections[remoteId];
+    if (!pc || pc.signalingState !== 'stable') return;
+
+    try {
+        const offer = await pc.createOffer({ iceRestart: true });
+        await pc.setLocalDescription(offer);
+        sendMessage({ type: 'offer', target_user_id: remoteId, sdp: offer.sdp });
+        console.log(`ICE restart initiated for ${remoteId}`);
+    } catch (err) {
+        console.error('ICE restart failed:', err);
+    }
+}
+
 async function handleOffer(msg, iceServers) {
     const remoteId = msg.from ?? msg.user_id ?? msg.sender;
     if (!remoteId) { console.warn('Offer missing remote id'); return; }
 
-    // if pc exists, close & re-create (clean state for a new offer)
     if (peerConnections[remoteId]) {
         try { peerConnections[remoteId].close(); } catch (e) { }
         delete peerConnections[remoteId];
-        removeVideoElement(remoteId); // Clean up the remote video too, in case of a crash/reconnect
+        removeVideoElement(remoteId);
     }
 
-    const pc = new RTCPeerConnection({ iceServers: iceServers }); // Pass full config here
+    const pc = new RTCPeerConnection({ iceServers: iceServers });
     peerConnections[remoteId] = pc;
 
-    // add local tracks
-    if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    // Initialize transceivers
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
+    pc.addTransceiver('video', { direction: 'sendrecv' });
+
+    if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        const videoTrack = localStream.getVideoTracks()[0];
+
+        const transceivers = pc.getTransceivers();
+        if (audioTrack && transceivers[0]) {
+            transceivers[0].sender.replaceTrack(audioTrack);
+        }
+        if (videoTrack && transceivers[1]) {
+            transceivers[1].sender.replaceTrack(videoTrack);
+        }
+    }
 
     pc.ontrack = (ev) => {
         const stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
@@ -374,7 +397,15 @@ async function handleOffer(msg, iceServers) {
         }
     };
 
-    // set remote offer, create & send answer
+    // Monitor connection state
+    pc.oniceconnectionstatechange = () => {
+        console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
+    };
+
+    pc.onconnectionstatechange = () => {
+        console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
+    };
+
     try {
         await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
         const ans = await pc.createAnswer();
@@ -385,7 +416,6 @@ async function handleOffer(msg, iceServers) {
     }
 }
 
-// Mic toggle
 function toggleMic() {
     if (!localStream) return;
     const track = localStream.getAudioTracks()[0];
@@ -396,7 +426,6 @@ function toggleMic() {
     toggleMicBtn.classList.toggle('off', !on);
 }
 
-// Video toggle (enable/disable local video track)
 function toggleVideo() {
     if (!localStream) return;
     const track = localStream.getVideoTracks()[0];
@@ -407,74 +436,61 @@ function toggleVideo() {
     toggleVideoBtn.classList.toggle('off', !on);
 }
 
-// Flip camera: get new stream with facingMode and replace video track in all peer connections
 async function flipCamera() {
     if (!localStream) {
         console.error("Local stream not available.");
         return;
     }
 
-    // Capture the state of tracks we want to maintain
     const wasVideoEnabled = localStream.getVideoTracks()[0]?.enabled ?? false;
-    const audioTrack = localStream.getAudioTracks()[0];
-    const wasAudioEnabled = audioTrack?.enabled ?? false;
-
-    // Stop all current tracks before switching
-    localStream.getTracks().forEach(track => track.stop());
+    const oldVideoTrack = localStream.getVideoTracks()[0];
 
     try {
-        // Determine new facing mode
         currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
-        // Request new stream with opposite facing mode
         const newStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: currentFacingMode },
-            audio: true // Request audio again, we'll re-enable/disable based on previous state
+            audio: false // Don't request audio, we already have it
         });
 
         const newVideoTrack = newStream.getVideoTracks()[0];
-        const newAudioTrack = newStream.getAudioTracks()[0];
-
-        // Re-apply previous enabled state
-        if (newVideoTrack) newVideoTrack.enabled = wasVideoEnabled;
-        if (newAudioTrack) newAudioTrack.enabled = wasAudioEnabled;
-
-        // 1. Update the local video element
-        const videoElement = document.getElementById(`video-${userId}`);
-        if (videoElement) {
-            videoElement.srcObject = newStream;
-            // Mirror local preview for user comfort
-            videoElement.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : '';
-        } else {
-            console.error(`Local video element with ID video-${userId} not found.`);
-        }
-
-        // 2. Replace track in every RTCPeerConnection
         if (newVideoTrack) {
+            newVideoTrack.enabled = wasVideoEnabled;
+
+            // Replace video track in all peer connections
             Object.values(peerConnections).forEach(pc => {
-                const videoSender = pc.getSenders().find(s => s.track?.kind === "video");
-                const audioSender = pc.getSenders().find(s => s.track?.kind === "audio");
+                const transceivers = pc.getTransceivers();
+                const videoTransceiver = transceivers.find(t => t.sender.track?.kind === 'video' || t.receiver.track?.kind === 'video');
 
-                if (videoSender) {
-                    videoSender.replaceTrack(newVideoTrack).catch(err => console.error("replaceTrack video failed:", err));
-                }
-
-                if (newAudioTrack && audioSender) {
-                    audioSender.replaceTrack(newAudioTrack).catch(err => console.error("replaceTrack audio failed:", err));
+                if (videoTransceiver && videoTransceiver.sender) {
+                    videoTransceiver.sender.replaceTrack(newVideoTrack)
+                        .catch(err => console.error("replaceTrack video failed:", err));
                 }
             });
-        }
 
-        // Update the global localStream reference
-        localStream = newStream;
+            // Update local stream
+            if (oldVideoTrack) {
+                localStream.removeTrack(oldVideoTrack);
+                oldVideoTrack.stop();
+            }
+            localStream.addTrack(newVideoTrack);
+
+            // Update local video element
+            const videoElement = document.getElementById(`video-${userId}`);
+            if (videoElement) {
+                videoElement.srcObject = localStream;
+                videoElement.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : '';
+            }
+        }
 
     } catch (err) {
         console.error("Error flipping camera:", err);
         alert("Unable to flip camera: " + err.message);
+        // Revert facing mode on error
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
     }
 }
 
-// leave / end call
 function leave() {
     if (ws && ws.readyState === WebSocket.OPEN) {
         sendMessage({ type: 'leave', room_id: roomId });
@@ -484,17 +500,14 @@ function leave() {
 }
 
 function cleanup() {
-    // close all peer connections
     Object.values(peerConnections).forEach(pc => {
         try { pc.close(); } catch (e) { }
     });
     peerConnections = {};
 
-    // stop local tracks
     if (localStream) localStream.getTracks().forEach(t => { try { t.stop(); } catch (e) { } });
     localStream = null;
 
-    // reset UI
     videosGrid.innerHTML = '';
     updateUsersList([]);
     videoContainer.classList.remove('active');
@@ -505,14 +518,11 @@ function cleanup() {
     toggleMicBtn.disabled = true;
     toggleVideoBtn.disabled = true;
     flipCameraBtn.disabled = true;
-    currentFacingMode = 'user'; // Reset camera to default (front)
+    currentFacingMode = 'user';
 
     updateStatus('Disconnected', false);
 }
 
-/* Optional: graceful cleanup when user navigates away */
 window.addEventListener('beforeunload', () => {
     try { leave(); } catch (e) { }
 });
-
-/* END of script */

@@ -100,11 +100,11 @@ async fn main() -> std::io::Result<()> {
                     .disable_content_disposition() // Prevent some attacks
                     .index_file("404.html"),
             )
+            .configure(calls::routes::call_routes)
             .configure(auth::routes::auth_routes)
             .configure(users::routes::user_routes)
             .configure(infrastructure::routes::infrastructure_routes)
             .configure(rooms::routes::room_routes)
-            .configure(calls::routes::call_routes)
     })
     .bind((server_address, server_port))?
     .run()
