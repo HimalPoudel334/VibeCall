@@ -1,45 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
-
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
-            integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw=="
-            crossorigin="anonymous" referrerpolicy="no-referrer" />
-
-        <title>
-            {% block title %}VibeCall{% endblock %}
-        </title>
-
-        <link rel="stylesheet" href="/vibecall/static/css/style.css">
-        {% block extra_head %}{% endblock %}
+        <title>{% block title %}My Website{% endblock %}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     </head>
+    <body class="bg-gray-50">
+        <nav class="bg-teal-600 shadow-lg">
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex-shrink-0">
+                        <span class="text-xl font-bold text-white">VibeCall</span>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-10 flex items-baseline space-x-4">
+                            <a href="/auth/login" class="text-teal-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Login</a>
+                            <a href="/call/ws/video-call" class="text-teal-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Video Demo</a>
+                        </div>
+                    </div>
+                    <div class="md:hidden">
+                        <button class="bg-teal-500 inline-flex items-center justify-center p-2 rounded-md text-white hover:text-teal-100 hover:bg-teal-700"></button>
+                    </div>
+                </div>
+            </div>
+        </nav>
 
-    <body>
-        <header class="navbar">
-            <div class="logo">VibeCall</div>
-            <nav class="nav-links" id="navLinks">
-                <a href="/vibecall/auth/login">Login</a>
-                <a href="/vibecall/auth/register">Sign Up</a>
-            </nav>
-            <div class="hamburger" id="hamburger">&#9776;</div>
-        </header>
-
-        <div class="container">
+        <main>
             {% block content %}{% endblock %}
-        </div>
-
-        <footer>
-            <p>&copy; 2024 VibeCall. All rights reserved.</p>
-        </footer>
+        </main>
 
         <script>
-            document.getElementById('hamburger').addEventListener('click', () => {
-                document.getElementById('navLinks').classList.toggle('active');
+            document.getElementById('mobile-menu-button').addEventListener('click', function() {
+                const mobileMenu = document.getElementById('mobile-menu');
+                mobileMenu.classList.toggle('hidden');
             });
         </script>
-        {% block extra_scripts %}{% endblock %}
     </body>
-
 </html>

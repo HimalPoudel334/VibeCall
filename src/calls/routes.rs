@@ -6,6 +6,7 @@ pub fn call_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/call")
             .service(websocket::websocket_handler)
+            .service(websocket::test_videocall)
             .service(handlers::update_call_status)
             .service(handlers::end_call)
             .service(handlers::list_active_participants)

@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Video Call - VibeCall{% endblock %}
+
+{% block content %}
+<style>
+    nav { display: none !important; }
+</style>
+
+<div class="h-screen w-screen bg-black flex flex-col">
+    <!-- Main Video Area -->
+    <div class="flex-1 relative">
+        <!-- Remote Video (other users) -->
+        <div id="remoteVideos" class="h-full w-full relative overflow-hidden">
+            <!-- Remote videos will be placed here -->
+        </div>
+
+        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg">
+            <video id="localVideo" class="w-full h-full object-cover" autoplay muted></video>
+            <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm">You</div>
+        </div>
+
+        <!-- Users List Panel (initially hidden) -->
+        <div id="usersListPanel" class="absolute top-20 right-4 bg-black/90 backdrop-blur-sm text-white p-4 rounded-lg w-64 hidden">
+            <h3 class="text-teal-400 font-semibold mb-3 border-b border-teal-600 pb-2">Connected Users</h3>
+            <div id="usersContent" class="space-y-2 max-h-64 overflow-y-auto">
+                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                    <span>user1</span>
+                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+                </div>
+                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                    <span>user2</span>
+                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Users Message Panel (initially hidden) -->
+        <div id="userMessagePanel" class="absolute space-y-3 top-20 right-4 bg-black/90 backdrop-blur-sm text-white p-4 rounded-lg w-64 hidden">
+            <h3 class="text-teal-400 font-semibold mb-3 border-b border-teal-600 pb-2">Messages</h3>
+            <div id="messageContent" class="space-y-2 max-h-64 overflow-y-auto">
+                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                    <span>user1</span>
+                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+                </div>
+                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                    <span>user2</span>
+                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <input
+                    type="text"
+                    id="userMessageInput"
+                    placeholder="Type a message..."
+                    class="flex-1 px-3 py-1 rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                <button
+                    id="sendUserMessage"
+                    class="text-teal-400 hover:text-teal-300 transition"
+                    title="Send Message"
+                >
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Controls (now outside main content area) -->
+    <div class="py-2 sm:py-4 md:py-6 flex items-center justify-center">
+        <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap justify-center max-w-[90vw]">
+            <button id="toggleMicBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Mic">
+                <i id="micIcon" class="fa-solid fa-microphone text-xs sm:text-sm md:text-lg"></i>
+            </button>
+            <button id="toggleVideoBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Video">
+                <i id="videoIcon" class="fa-solid fa-video text-xs sm:text-sm md:text-lg"></i>
+            </button>
+            <button id="flipCameraBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Flip Camera">
+                <i class="fa-solid fa-camera-rotate text-xs sm:text-sm md:text-lg"></i>
+            </button>
+            <button id="userMessageBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Messages">
+                <i class="fa-solid fa-comment text-xs sm:text-sm md:text-lg"></i>
+            </button>
+            <button id="usersListToggle" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Users List">
+                <i class="fa-solid fa-users text-xs sm:text-sm md:text-lg"></i>
+            </button>
+            <button id="endCallBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="End Call">
+                <i class="fa-solid fa-phone text-xs sm:text-sm md:text-lg"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Users list toggle functionality
+    document.getElementById('usersListToggle').addEventListener('click', function() {
+        const messagePanel = document.getElementById('userMessagePanel');
+        const usersPanel = document.getElementById('usersListPanel');
+        if (!messagePanel.classList.contains('hidden')) {
+            messagePanel.classList.add('hidden');
+        }
+        usersPanel.classList.toggle('hidden');
+    });
+
+    document.getElementById('userMessageBtn').addEventListener('click', function() {
+        const usersPanel = document.getElementById('usersListPanel');
+        const messagePanel = document.getElementById('userMessagePanel');
+        if (!usersPanel.classList.contains('hidden')) {
+            usersPanel.classList.add('hidden');
+        }
+        messagePanel.classList.toggle('hidden');
+    });
+
+    // Control functionality with teal theme
+    document.getElementById('toggleMicBtn').addEventListener('click', function() {
+        this.classList.toggle('bg-teal-600');
+        const icon = this.querySelector('i');
+        icon.className = this.classList.contains('bg-teal-600') 
+            ? 'fa-solid fa-microphone-slash text-lg' 
+            : 'fa-solid fa-microphone text-lg';
+    });
+
+    document.getElementById('toggleVideoBtn').addEventListener('click', function() {
+        this.classList.toggle('bg-teal-600');
+        const icon = this.querySelector('i');
+        icon.className = this.classList.contains('bg-teal-600') 
+            ? 'fa-solid fa-video-slash text-lg' 
+            : 'fa-solid fa-video text-lg';
+    });
+
+    document.getElementById('flipCameraBtn').addEventListener('click', function() {
+        this.classList.toggle('bg-teal-600');
+    });
+
+    function addRemoteVideo(userId, userName) {
+        const colors = [
+            'bg-red', 'bg-blue', 'bg-green', 'bg-purple', 
+            'bg-pink', 'bg-indigo', 'bg-yellow', 'bg-orange'
+        ];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        const remoteVideos = document.getElementById('remoteVideos');
+        
+        const videoContainer = document.createElement('div');
+        videoContainer.className = `relative ${randomColor}-500 rounded-lg overflow-hidden border-2 border-teal-400/50 m-2 w-full h-full max-w-sm aspect-video`; // added spacing + aspect ratio
+        videoContainer.id = `remote-video-${userId}`;
+        
+        const videoElement = document.createElement('video');
+        videoElement.className = 'w-full h-full object-cover bg-transparent'; // prevent black background
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        videoElement.muted = true; // optional, required in some browsers
+        videoElement.setAttribute('playsinline', 'true');
+        
+        // Placeholder with initials
+        const placeholder = document.createElement('div');
+        placeholder.className = 'absolute inset-0 flex items-center justify-center z-10 pointer-events-none';
+        
+        const initials = getUserInitials(userName);
+        
+        placeholder.innerHTML = `
+            <div class="w-20 h-20 ${randomColor}-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                ${initials}
+            </div>
+        `;
+        
+        // Username overlay
+        const userNameElement = document.createElement('div');
+        userNameElement.className = 'absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded text-sm z-20';
+        userNameElement.textContent = userName;
+        
+        // Add elements
+        videoContainer.appendChild(videoElement);
+        videoContainer.appendChild(placeholder);
+        videoContainer.appendChild(userNameElement);
+        remoteVideos.appendChild(videoContainer);
+        
+        // Layout update
+        updateVideoLayout(remoteVideos.children.length);
+        
+        return videoElement;
+    }
+    
+    function getUserInitials(userName) {
+        const names = userName.split(' ');
+        if (names.length === 1) {
+            return names[0].charAt(0).toUpperCase();
+        }
+        return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+    }
+    
+    function updateVideoLayout(videoCount) {
+        const remoteVideos = document.getElementById('remoteVideos');
+        const videos = remoteVideos.children;
+    
+        // Reset all video container layout styles without wiping background color
+        for (let video of videos) {
+            video.classList.remove(
+                'h-full', 'w-full', 'w-1/2', 'h-1/2', 'top-0', 'top-1/2', 'left-0', 'left-1/2', 
+                'absolute', 'relative', 'grid', 'grid-cols-2', 'gap-2', 'p-2'
+            );
+            video.classList.add('overflow-hidden', 'border-2', 'border-teal-400/50', 'rounded-lg');
+        }
+    
+        if (videoCount === 1) {
+            videos[0].classList.add('h-full', 'w-full', 'absolute', 'top-0', 'left-0');
+        } else if (videoCount === 2) {
+            videos[0].classList.add('h-full', 'w-1/2', 'absolute', 'top-0', 'left-0');
+            videos[1].classList.add('h-full', 'w-1/2', 'absolute', 'top-0', 'left-1/2');
+        } else if (videoCount === 3) {
+            videos[0].classList.add('h-1/2', 'w-1/2', 'absolute', 'top-0', 'left-0');
+            videos[1].classList.add('h-1/2', 'w-1/2', 'absolute', 'top-0', 'left-1/2');
+            videos[2].classList.add('h-1/2', 'w-full', 'absolute', 'top-1/2', 'left-0');
+        } else if (videoCount >= 4) {
+            remoteVideos.className = 'h-full w-full grid grid-cols-2 gap-2 p-2 relative';
+    
+            for (let video of videos) {
+                video.classList.remove('absolute', 'top-0', 'left-0'); // ensure clean grid placement
+                video.classList.add('relative', 'min-h-[200px]', 'bg-gray-800'); // fallback bg
+            }
+    }
+}    
+    function removeRemoteVideo(userId) {
+        const videoElement = document.getElementById(`remote-video-${userId}`);
+        if (videoElement) {
+            videoElement.remove();
+            const remoteVideos = document.getElementById('remoteVideos');
+            updateVideoLayout(remoteVideos.children.length);
+        }
+    }
+
+    // Demo: Simulate adding remote users
+    setTimeout(() => {
+        // Add first remote user
+        addRemoteVideo('user1', 'User 1');
+        addRemoteVideo('user2', 'User 2');
+        
+        // Update users list
+        document.getElementById('usersContent').innerHTML = `
+            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                <span>You</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            </div>
+            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                <span>User 1</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            </div>
+        `;
+    }, 1000);
+</script>
+{% endblock %}

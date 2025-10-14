@@ -12,31 +12,37 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
 }
 
 .navbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     background-color: #4c51bf;
-    color: white;
-    padding: 1rem 2rem;
+    padding: 0.5rem 0;
+    width: 100%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     position: fixed;
     top: 0;
-    width: 100%;
     z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
 }
 
 .logo {
     font-size: 1.5rem;
     font-weight: bold;
+    color: white;
 }
 
 .nav-links {
     display: flex;
     gap: 1.5rem;
+    margin-left: auto;
 }
 
 .nav-links a {
@@ -53,21 +59,41 @@ body {
 .hamburger {
     display: none;
     font-size: 1.8rem;
+    color: white;
+    background: none;
+    border: none;
     cursor: pointer;
 }
 
-/* Responsive Navbar */
+footer {
+    text-align: center;
+    padding: 1rem;
+    color: white;
+    margin-top: auto;
+}
+
 @media (max-width: 768px) {
+    .navbar .container {
+        padding: 0 1rem;
+    }
+
+    .logo {
+        font-size: 1.2rem;
+        width: 66.66%;
+        /* 2/3 of the navbar width */
+        text-align: center;
+    }
+
     .nav-links {
+        display: none;
         position: absolute;
-        top: 64px;
-        /* Height of navbar */
-        right: 0;
+        top: 100%;
+        left: 0;
         background-color: #4c51bf;
         flex-direction: column;
         width: 100%;
-        display: none;
         padding: 1rem 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .nav-links.active {
@@ -76,5 +102,12 @@ body {
 
     .hamburger {
         display: block;
+        width: 33.33%;
+        /* 1/3 of the navbar width */
+        font-size: 1.2rem;
+        /* Reduced size to make it smaller */
+        text-align: right;
+        padding-right: 0.5rem;
+        /* Ensures it stays aligned to the right edge */
     }
 }

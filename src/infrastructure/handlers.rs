@@ -39,7 +39,7 @@ pub async fn index(
         Some(id) => id,
         None => {
             return Ok(HttpResponse::Found()
-                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .append_header((header::LOCATION, "/auth/login"))
                 .finish());
         }
     };
@@ -71,7 +71,7 @@ pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Resu
         Some(id) => id,
         None => {
             return Ok(HttpResponse::Found()
-                .append_header((header::LOCATION, "/vibecall/auth/login"))
+                .append_header((header::LOCATION, "/auth/login"))
                 .finish());
         }
     };

@@ -1,8 +1,13 @@
 use actix_identity::Identity;
-use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, get, http::header, rt, web};
+use actix_web::{
+    HttpRequest, HttpResponse, Result as ActixResult, get,
+    http::header::{self, ContentType},
+    rt, web,
+};
 use actix_ws::{AggregatedMessage, CloseReason, handle};
 use futures::StreamExt;
 use std::sync::Arc;
+use tera::Context;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::{
@@ -10,6 +15,7 @@ use crate::{
         entities::{ServerMessage, SignalingMessage},
         signalling_server::SignalingServer,
     },
+    infrastructure::templates::TEMPLATES,
     shared::response::AppError,
 };
 
@@ -234,4 +240,18 @@ async fn handle_text_message(
     }
 
     Ok(())
+}
+
+#[get("/ws/video-call")]
+pub async fn test_videocall() -> actix_web::Result<HttpResponse> {
+    let mut context = Context::new();
+    context.insert("title", "VideoCall Test");
+
+    let rendered = TEMPLATES
+        .render("videos.html", &context)
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    Ok(HttpResponse::Ok()
+        .content_type(ContentType::html())
+        .body(rendered))
 }

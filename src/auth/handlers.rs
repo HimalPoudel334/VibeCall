@@ -53,7 +53,7 @@ pub async fn login_post(
 
     Identity::login(&req.extensions(), user.id.to_string())?;
 
-    Ok(web::Redirect::to("/vibecall").using_status_code(StatusCode::FOUND))
+    Ok(web::Redirect::to("/").using_status_code(StatusCode::FOUND))
 
     // let mut context = Context::new();
     // context.insert("user", &user);

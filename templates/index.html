@@ -1,51 +1,107 @@
 {% extends "base.html" %}
 
-{% block title %}VibeCall - Video Conferencing{% endblock %}
-
-{% block extra_head %}
-    <link rel="stylesheet" href="/vibecall/static/css/index.css">
-{% endblock %}
+{% block title %}Join Call - VibeCall{% endblock %}
 
 {% block content %}
-    <div class="join-container" id="joinContainer">
-        <h1>🎥 VibeCall</h1>
+<div class="min-h-screen flex justify-center items-start pt-8">
+    <div class="max-w-md w-full space-y-8">
+        <div class="bg-white p-8 rounded-lg shadow-lg border border-gray-100">
+            <div class="text-center">
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">🎥 VibeCall</h1>
+                <p class="text-gray-600 mb-6">Join your video conference room</p>
+            </div>
+            
+            <div class="join-container" id="joinContainer">
+                <div class="space-y-6">
+                    <div class="input-group">
+                        <label for="roomId" class="block text-sm font-medium text-gray-700 mb-2">Room ID</label>
+                        <input id="roomId" type="text" 
+                               class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               value="d7694d42-2fea-4f14-a086-add07a7bf876" />
+                    </div>
 
-        <div class="input-group">
-            <label>Room ID</label>
-            <input id="roomId" type="text" value="d7694d42-2fea-4f14-a086-add07a7bf876" />
+                    <div class="space-y-3">
+                        <button id="connectBtn" 
+                                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-200 transform hover:-translate-y-0.5"
+                                onclick="connect('{{ user.id }}')">
+                            Connect & Join Call
+                        </button>
+                        
+                        <button id="leaveBtn" 
+                                class="hidden group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-200 transform hover:-translate-y-0.5"
+                                disabled>
+                            Leave Call
+                        </button>
+                    </div>
+
+                    <div id="status" class="status disconnected text-center py-3 px-4 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 font-medium">
+                        Disconnected
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <button id="connectBtn" class="btn btn-primary" onclick="connect('{{ user.id }}')">Connect & Join Call</button>
-        <button id="leaveBtn" class="btn btn-danger" disabled>Leave Call</button>
-
-        <div id="status" class="status disconnected">Disconnected</div>
     </div>
+</div>
 
-    <!-- video area shown after join -->
-    <div class="video-container" id="videoContainer">
-        <div class="videos" id="videosGrid"></div>
+<style>
+    .status.connected {
+        background-color: #f0fdf4;
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+    
+    .status.connecting {
+        background-color: #fffbeb;
+        border-color: #fde68a;
+        color: #92400e;
+    }
+    
+    .status.disconnected {
+        background-color: #fef2f2;
+        border-color: #fecaca;
+        color: #991b1b;
+    }
+    
+    .status.error {
+        background-color: #fef2f2;
+        border-color: #fecaca;
+        color: #dc2626;
+    }
+</style>
 
-        <!-- controls inside video area (will be visible after join) -->
-        <div class="controls" id="controlsRow" style="display:none;">
-            <button id="toggleMicBtn" class="circle-btn" title="Toggle Mic" disabled><i id="micIcon"
-                    class="fa-solid fa-microphone"></i></button>
-            <button id="toggleVideoBtn" class="circle-btn" title="Toggle Video" disabled><i id="videoIcon"
-                    class="fa-solid fa-video"></i></button>
-            <button id="flipCameraBtn" class="circle-btn" title="Flip Camera" disabled><i
-                    class="fa-solid fa-camera-rotate"></i></button>
-            <!-- End Call icon -->
-            <button id="endCallBtn" class="circle-btn" title="End Call" style="background:#b91c1c;"><i
-                    class="fa-solid fa-phone"></i></button>
-        </div>
-
-        <div class="users-list" id="usersList">
-            <h3>Connected Users</h3>
-            <div id="usersContent">None</div>
-        </div>
-    </div>
-
-{% endblock %}
-
-{% block extra_scripts %}
-    <script src="/vibecall/static/js/index.js"></script>
+<script>
+    function connect(userId) {
+        const roomId = document.getElementById('roomId').value;
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        
+        status.textContent = 'Connecting...';
+        status.className = 'status connecting text-center py-3 px-4 rounded-lg border border-gray-200 font-medium';
+        
+        connectBtn.disabled = true;
+        
+        // Simulate API call
+        setTimeout(() => {
+            status.textContent = 'Connected to room: ' + roomId;
+            status.className = 'status connected text-center py-3 px-4 rounded-lg border border-gray-200 font-medium';
+            
+            connectBtn.disabled = true;
+            leaveBtn.disabled = false;
+            leaveBtn.classList.remove('hidden');
+        }, 2000);
+    }
+    
+    document.getElementById('leaveBtn').addEventListener('click', function() {
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        
+        status.textContent = 'Disconnected';
+        status.className = 'status disconnected text-center py-3 px-4 rounded-lg border border-gray-200 font-medium';
+        
+        connectBtn.disabled = false;
+        leaveBtn.disabled = true;
+    });
+</script>
 {% endblock %}
