@@ -7,37 +7,32 @@
     nav { display: none !important; }
 </style>
 
-<div class="h-screen w-screen bg-teal/90 flex flex-col">
+<div class="h-screen w-screen bg-teal-900/90 flex flex-col">
     <!-- Main Video Area -->
-    <div class="flex-1 relative">
+    <div class="flex-1 relative overflow-hidden" style="min-height: 0;">
         <!-- Remote Video (other users) -->
-        <div id="remoteVideos" class="w-full relative overflow-hidden">
+        <div id="remoteVideos" class="w-full h-full grid gap-0.5 sm:gap-1 p-0.5 sm:p-1 overflow-auto" style="max-height: calc(100vh - 80px);">
             <!-- Remote videos will be placed here -->
         </div>
 
-        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg">
+        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg z-10" style="max-height: 200px; max-width: 300px;">
             <video id="localVideo" class="w-full h-full object-cover" autoplay muted></video>
             <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm">You</div>
         </div>
 
         <!-- Users List Panel (initially hidden) -->
-        <div id="usersListPanel" class="absolute top-20 right-4 bg-black/90 backdrop-blur-sm text-white p-4 rounded-lg w-64 hidden">
+        <div id="usersListPanel" class="absolute top-20 right-4 bg-black/90 backdrop-blur-sm text-white p-4 rounded-lg w-80 hidden">
             <h3 class="text-teal-400 font-semibold mb-3 border-b border-teal-600 pb-2">Connected Users</h3>
             <div id="usersContent" class="space-y-2 max-h-64 overflow-y-auto">
                 <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
                     <span>user1</span>
                     <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
                 </div>
-                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                    <span>user2</span>
-                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-                </div>
             </div>
         </div>
 
-
         <!-- Users Message Panel (initially hidden) -->
-        <div id="userMessagePanel" class="absolute space-y-3 top-20 right-4 bg-black/90 backdrop-blur-sm text-white p-4 rounded-lg w-64 hidden">
+        <div id="userMessagePanel" class="absolute space-y-3 top-20 right-4 bg-black/90 backdrop-blur-sm text-white p-4 rounded-lg w-80 hidden">
             <h3 class="text-teal-400 font-semibold mb-3 border-b border-teal-600 pb-2">Messages</h3>
             <div id="messageContent" class="space-y-2 max-h-64 overflow-y-auto">
                 <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
@@ -49,7 +44,6 @@
                     <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
                 </div>
             </div>
-
             <div class="flex items-center space-x-2">
                 <input
                     type="text"
@@ -66,11 +60,10 @@
                 </button>
             </div>
         </div>
-
     </div>
 
-    <!-- Controls (now outside main content area) -->
-    <div class="py-2 sm:py-4 md:py-6 flex items-center justify-center">
+    <!-- Controls -->
+    <div class="py-4 flex items-center justify-center bg-teal-900/90" style="height: 80px;">
         <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap justify-center max-w-[90vw]">
             <button id="toggleMicBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Mic">
                 <i id="micIcon" class="fa-solid fa-microphone text-xs sm:text-sm md:text-lg"></i>
@@ -114,7 +107,7 @@
         messagePanel.classList.toggle('hidden');
     });
 
-    // Control functionality with teal theme
+    // Control buttons (unchanged)
     document.getElementById('toggleMicBtn').addEventListener('click', function() {
         this.classList.toggle('bg-teal-600');
         const icon = this.querySelector('i');
@@ -136,40 +129,29 @@
     });
 
     function addRemoteVideo(userId, userName) {
-        const colors = [
-            'bg-red', 'bg-blue', 'bg-green', 'bg-purple', 
-            'bg-pink', 'bg-indigo', 'bg-yellow', 'bg-orange'
-        ];
-        const randomColor = colors[Math.floor(Math.random() * colors.length)];
-        
         const remoteVideos = document.getElementById('remoteVideos');
         
         const videoContainer = document.createElement('div');
-        videoContainer.className = `relative ${randomColor}-500 rounded-lg overflow-hidden border-2 border-teal-400/50 m-2 w-full h-full max-w-sm aspect-video`; // added spacing + aspect ratio
         videoContainer.id = `remote-video-${userId}`;
+        videoContainer.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500/50 w-full h-full';
         
-        const videoElement = document.createElement('video');
-        videoElement.className = 'w-full h-full object-cover bg-transparent'; // prevent black background
-        videoElement.autoplay = true;
-        videoElement.playsInline = true;
-        videoElement.muted = true; // optional, required in some browsers
-        videoElement.setAttribute('playsinline', 'true');
+        const videoElement = document.createElement('div');
+        videoElement.className = 'w-full h-full object-cover bg-gray-700'; // Using div as placeholder
         
         // Placeholder with initials
         const placeholder = document.createElement('div');
-        placeholder.className = 'absolute inset-0 flex items-center justify-center z-10 pointer-events-none';
+        placeholder.className = 'absolute inset-0 flex items-center justify-center bg-gray-700';
         
         const initials = getUserInitials(userName);
-        
         placeholder.innerHTML = `
-            <div class="w-20 h-20 ${randomColor}-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+            <div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
                 ${initials}
             </div>
         `;
         
         // Username overlay
         const userNameElement = document.createElement('div');
-        userNameElement.className = 'absolute top-2 left-2 bg-black/70 text-white px-3 py-1 rounded text-sm z-20';
+        userNameElement.className = 'absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm';
         userNameElement.textContent = userName;
         
         // Add elements
@@ -178,10 +160,8 @@
         videoContainer.appendChild(userNameElement);
         remoteVideos.appendChild(videoContainer);
         
-        // Layout update
+        // Update layout
         updateVideoLayout(remoteVideos.children.length);
-        
-        return videoElement;
     }
     
     function getUserInitials(userName) {
@@ -194,35 +174,52 @@
     
     function updateVideoLayout(videoCount) {
         const remoteVideos = document.getElementById('remoteVideos');
-        const videos = remoteVideos.children;
-    
-        // Reset all video container layout styles without wiping background color
-        for (let video of videos) {
-            video.classList.remove(
-                'h-full', 'w-full', 'w-1/2', 'h-1/2', 'top-0', 'top-1/2', 'left-0', 'left-1/2', 
-                'absolute', 'relative', 'grid', 'grid-cols-2', 'gap-2', 'p-2'
-            );
-            video.classList.add('overflow-hidden', 'border-2', 'border-teal-400/50', 'rounded-lg');
-        }
-    
-        if (videoCount === 1) {
-            videos[0].classList.add('h-full', 'w-full', 'absolute', 'top-0', 'left-0');
-        } else if (videoCount === 2) {
-            videos[0].classList.add('h-full', 'w-1/2', 'absolute', 'top-0', 'left-0');
-            videos[1].classList.add('h-full', 'w-1/2', 'absolute', 'top-0', 'left-1/2');
-        } else if (videoCount === 3) {
-            videos[0].classList.add('h-1/2', 'w-1/2', 'absolute', 'top-0', 'left-0');
-            videos[1].classList.add('h-1/2', 'w-1/2', 'absolute', 'top-0', 'left-1/2');
-            videos[2].classList.add('h-1/2', 'w-full', 'absolute', 'top-1/2', 'left-0');
-        } else if (videoCount >= 4) {
-            remoteVideos.className = 'h-full w-full grid grid-cols-2 gap-2 p-2 relative';
-    
-            for (let video of videos) {
-                video.classList.remove('absolute', 'top-0', 'left-0'); // ensure clean grid placement
-                video.classList.add('relative', 'min-h-[200px]', 'bg-gray-800'); // fallback bg
+        const localVideoContainer = document.getElementById('localVideoContainer');
+        const isMobile = window.innerWidth < 640; // Mobile breakpoint (Tailwind 'sm')
+        
+        // Completely reset all grid-related classes and styles
+        remoteVideos.className = 'w-full h-full grid gap-0.5 sm:gap-1 p-0.5 sm:p-1 overflow-auto';
+        remoteVideos.style.gridAutoRows = '';
+        
+        // Count actual remote videos (excluding local video if it's in the grid)
+        const actualRemoteCount = remoteVideos.contains(localVideoContainer) ? videoCount - 1 : videoCount;
+        
+        // Handle local video placement (only on mobile if >2 remote users)
+        if (actualRemoteCount > 2 && isMobile) {
+            // Move local video into grid
+            if (!remoteVideos.contains(localVideoContainer)) {
+                localVideoContainer.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg w-full h-full';
+                localVideoContainer.style.maxHeight = '';
+                localVideoContainer.style.maxWidth = '';
+                remoteVideos.appendChild(localVideoContainer);
             }
+            // Set equal row heights for mobile grid
+            remoteVideos.style.gridAutoRows = '1fr';
+        } else {
+            // Return local video to absolute position
+            if (remoteVideos.contains(localVideoContainer)) {
+                remoteVideos.removeChild(localVideoContainer);
+                localVideoContainer.className = 'absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg z-10';
+                localVideoContainer.style.maxHeight = '200px';
+                localVideoContainer.style.maxWidth = '300px';
+                document.querySelector('.flex-1').appendChild(localVideoContainer);
+            }
+        }
+
+        // Adjust grid columns based on actual remote video count
+        if (actualRemoteCount === 0) {
+            remoteVideos.classList.add('grid-cols-1');
+        } else if (actualRemoteCount === 1) {
+            remoteVideos.classList.add('grid-cols-1');
+        } else if (actualRemoteCount === 2) {
+            remoteVideos.classList.add('grid-cols-1', 'sm:grid-cols-2');
+        } else if (actualRemoteCount <= 4) {
+            remoteVideos.classList.add('grid-cols-2', 'sm:grid-cols-2');
+        } else {
+            remoteVideos.classList.add('grid-cols-2', 'sm:grid-cols-2', 'lg:grid-cols-3');
+        }
     }
-}    
+    
     function removeRemoteVideo(userId) {
         const videoElement = document.getElementById(`remote-video-${userId}`);
         if (videoElement) {
@@ -232,11 +229,24 @@
         }
     }
 
+    // Add resize event listener to update layout on window resize
+    window.addEventListener('resize', () => {
+        const remoteVideos = document.getElementById('remoteVideos');
+        updateVideoLayout(remoteVideos.children.length);
+    });
+
+    // Initial layout update on load
+    window.addEventListener('load', () => {
+        const remoteVideos = document.getElementById('remoteVideos');
+        updateVideoLayout(remoteVideos.children.length);
+    });
+
     // Demo: Simulate adding remote users
     setTimeout(() => {
-        // Add first remote user
         addRemoteVideo('user1', 'User 1');
         addRemoteVideo('user2', 'User 2');
+        addRemoteVideo('user3', 'User 3');
+        addRemoteVideo('user4', 'User 4');
         
         // Update users list
         document.getElementById('usersContent').innerHTML = `
@@ -248,7 +258,47 @@
                 <span>User 1</span>
                 <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
             </div>
+            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                <span>User 2</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            </div>
+            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                <span>User 3</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            </div>
+            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                <span>User 4</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            </div>
         `;
     }, 1000);
+
+    const sendUserMessageBtn = document.getElementById('sendUserMessage');
+    sendUserMessageBtn.addEventListener('click', sendUserMessage);
+    const messageInputField = document.getElementById('userMessageInput');
+    messageInputField.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            sendUserMessage();
+        }
+    });
+
+    function sendUserMessage(){
+        const messageInput = document.getElementById('userMessageInput');
+        const message = messageInput.value.trim();
+        if (message) {
+            const messageContent = document.getElementById('messageContent');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'flex items-center justify-between p-2 bg-gray-800 rounded';
+            messageElement.innerHTML = `
+                <span>You: ${message}</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            `;
+            messageContent.appendChild(messageElement);
+            messageInput.value = '';
+            messageContent.scrollTop = messageContent.scrollHeight;
+        }
+    };
+
 </script>
 {% endblock %}
