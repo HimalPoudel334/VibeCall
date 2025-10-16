@@ -117,7 +117,7 @@ async function connect(uid) {
     if (!userId || !roomId) { alert('Please enter User ID and Room ID'); return; }
 
     try {
-        const turnResponse = await fetch('https://himalpoudel.name.np/vibecall/turn-credentials');
+        const turnResponse = await fetch('http://localhost:8085/turn-credentials');
         const turnConfig = await turnResponse.json();
 
         const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -145,7 +145,7 @@ async function connect(uid) {
 
         addVideoElement(userId, localStream, 'You');
 
-        const serverUrl = `wss://himalpoudel.name.np/vibecall/call/ws/rooms`;
+        const serverUrl = `http://localhost:8085/call/ws/rooms`;
         ws = new WebSocket(`${serverUrl}/${roomId}`);
 
         ws.onopen = () => {

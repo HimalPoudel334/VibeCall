@@ -21,11 +21,10 @@
                     </div>
 
                     <div class="space-y-3">
-                        <button id="connectBtn" 
-                                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-200 transform hover:-translate-y-0.5"
-                                onclick="connect('{{ user.id }}')">
+                        <a id="connectBtn" 
+                                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-200 transform hover:-translate-y-0.5">
                             Connect & Join Call
-                        </button>
+                        </a>
                         
                         <button id="leaveBtn" 
                                 class="hidden group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-200 transform hover:-translate-y-0.5"
@@ -70,27 +69,19 @@
 </style>
 
 <script>
-    function connect(userId) {
-        const roomId = document.getElementById('roomId').value;
-        const status = document.getElementById('status');
         const connectBtn = document.getElementById('connectBtn');
-        const leaveBtn = document.getElementById('leaveBtn');
-        
-        status.textContent = 'Connecting...';
-        status.className = 'status connecting text-center py-3 px-4 rounded-lg border border-gray-200 font-medium';
-        
-        connectBtn.disabled = true;
-        
-        // Simulate API call
-        setTimeout(() => {
-            status.textContent = 'Connected to room: ' + roomId;
-            status.className = 'status connected text-center py-3 px-4 rounded-lg border border-gray-200 font-medium';
-            
-            connectBtn.disabled = true;
-            leaveBtn.disabled = false;
-            leaveBtn.classList.remove('hidden');
-        }, 2000);
-    }
+
+        connectBtn.addEventListener('click', (e) => {
+            const roomId = encodeURIComponent(document.getElementById('roomId').value.trim());
+
+            if (!roomId) {
+                e.preventDefault(); 
+                alert("Room ID is required");
+                return;
+            }
+            connectBtn.href = `/call/ws/video?roomId=${roomId}`;
+        });
+
     
     document.getElementById('leaveBtn').addEventListener('click', function() {
         const status = document.getElementById('status');
@@ -103,5 +94,23 @@
         connectBtn.disabled = false;
         leaveBtn.disabled = true;
     });
+
+
+    async function getTurnCredentials() {
+        const turnResponse = await fetch('http://localhost:8085/turn-credentials');
+        const turnConfig = await turnResponse.json();
+
+        const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+        if (turnConfig && turnConfig.data && turnConfig.data.urls) {
+            iceServers.push({
+                urls: turnConfig.data.urls,
+                username: turnConfig.data.username,
+                credential: turnConfig.data.credential
+            });
+        }
+
+        return iceServers;
+    }
 </script>
 {% endblock %}

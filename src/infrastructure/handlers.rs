@@ -88,12 +88,23 @@ pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Resu
     let result = mac.finalize();
     let credential = general_purpose::STANDARD.encode(result.into_bytes());
 
-    respond_ok(TurnCredentials {
+    TurnCredentials {
         username,
         credential,
         urls: vec![
             "stun:159.13.60.202:3478".to_string(),
             "turn:159.13.60.202:3478".to_string(),
         ],
-    })
+    };
+
+    let mut context = Context::new();
+    context.insert("title", "Home Page");
+
+    let rendered = TEMPLATES
+        .render("videos.html", &context)
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    Ok(HttpResponse::Ok()
+        .content_type(ContentType::html())
+        .body(rendered))
 }
