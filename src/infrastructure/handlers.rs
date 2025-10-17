@@ -88,7 +88,7 @@ pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Resu
     let result = mac.finalize();
     let credential = general_purpose::STANDARD.encode(result.into_bytes());
 
-    TurnCredentials {
+    let turn_credentials = TurnCredentials {
         username,
         credential,
         urls: vec![
@@ -99,6 +99,7 @@ pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Resu
 
     let mut context = Context::new();
     context.insert("title", "Home Page");
+    context.insert("turn_credentials", &turn_credentials);
 
     let rendered = TEMPLATES
         .render("videos.html", &context)

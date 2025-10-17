@@ -300,5 +300,24 @@
         }
     };
 
+
+    const 
+        iceServers = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            {
+            urls: '{{ turn_credentials.urls|tojson }}',
+                username: '{{ turn_credentials.username }}',
+            credential: '{{ turn_credentials.credential }}'
+            }
+        ]
+    
+
+    async function connect(userId) {
+        const roomId = document.getElementById('roomId').value;
+        const status = document.getElementById('status');
+        
+
+    }
+
 </script>
 {% endblock %}
