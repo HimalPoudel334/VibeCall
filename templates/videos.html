@@ -88,6 +88,11 @@
 </div>
 
 <script>
+    let ws = null;
+    let peerConnections = {};
+    const userId = '{{ user_id }}';
+    let localStream = null;
+
     // Users list toggle functionality
     document.getElementById('usersListToggle').addEventListener('click', function() {
         const messagePanel = document.getElementById('userMessagePanel');
@@ -109,7 +114,14 @@
 
     // Control buttons (unchanged)
     document.getElementById('toggleMicBtn').addEventListener('click', function() {
-        this.classList.toggle('bg-teal-600');
+
+        if (!localStream) return;
+        const track = localStream.getAudioTracks()[0];
+        if (!track) return;
+        track.enabled = !track.enabled;
+        const on = track.enabled;
+
+        this.classList.toggle('bg-red-600');
         const icon = this.querySelector('i');
         icon.className = this.classList.contains('bg-teal-600') 
             ? 'fa-solid fa-microphone-slash text-lg' 
@@ -117,7 +129,14 @@
     });
 
     document.getElementById('toggleVideoBtn').addEventListener('click', function() {
-        this.classList.toggle('bg-teal-600');
+
+        if (!localStream) return;
+        const track = localStream.getVideoTracks()[0];
+        if (!track) return;
+        track.enabled = !track.enabled;
+        const on = track.enabled;
+
+        this.classList.toggle('bg-red-600');
         const icon = this.querySelector('i');
         icon.className = this.classList.contains('bg-teal-600') 
             ? 'fa-solid fa-video-slash text-lg' 
@@ -128,42 +147,121 @@
         this.classList.toggle('bg-teal-600');
     });
 
-    function addRemoteVideo(userId, userName) {
-        const remoteVideos = document.getElementById('remoteVideos');
-        
-        const videoContainer = document.createElement('div');
-        videoContainer.id = `remote-video-${userId}`;
-        videoContainer.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500/50 w-full h-full';
-        
-        const videoElement = document.createElement('div');
-        videoElement.className = 'w-full h-full object-cover bg-gray-700'; // Using div as placeholder
-        
-        // Placeholder with initials
-        const placeholder = document.createElement('div');
-        placeholder.className = 'absolute inset-0 flex items-center justify-center bg-gray-700';
-        
-        const initials = getUserInitials(userName);
-        placeholder.innerHTML = `
-            <div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
-                ${initials}
-            </div>
-        `;
-        
-        // Username overlay
-        const userNameElement = document.createElement('div');
-        userNameElement.className = 'absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm';
-        userNameElement.textContent = userName;
-        
-        // Add elements
-        videoContainer.appendChild(videoElement);
-        videoContainer.appendChild(placeholder);
-        videoContainer.appendChild(userNameElement);
-        remoteVideos.appendChild(videoContainer);
-        
-        // Update layout
-        updateVideoLayout(remoteVideos.children.length);
+    function addRemoteVideo(userId, userName, stream) {
+
+        const vidId = `video-${userId}`;
+        let videoElement = document.getElementById(vidId);
+
+        if (!videoElement) {
+            const remoteVideos = document.getElementById('remoteVideos');
+            
+            const videoContainer = document.createElement('div');
+            videoContainer.id = `remote-video-${userId}`;
+            videoContainer.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500/50 w-full h-full';
+            
+            videoElement = document.createElement('video');
+            videoElement.id = vidId;
+            videoElement.className = 'w-full h-full object-cover bg-gray-700'; // Using div as placeholder
+            
+            if(!stream) {
+                // Placeholder with initials
+                const placeholder = document.createElement('div');
+                placeholder.className = 'absolute inset-0 flex items-center justify-center bg-gray-700';
+                
+                const initials = getUserInitials(userName);
+                placeholder.innerHTML = `
+                    <div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                        ${initials}
+                    </div>
+                `;
+            }
+            
+            // Username overlay
+            const userNameElement = document.createElement('div');
+            userNameElement.className = 'absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm';
+            userNameElement.textContent = userName;
+            
+            // Add elements
+            videoContainer.appendChild(videoElement);
+            videoContainer.appendChild(placeholder);
+            videoContainer.appendChild(userNameElement);
+            remoteVideos.appendChild(videoContainer);
+            
+            // Update layout
+            updateVideoLayout(remoteVideos.children.length);
+        }
+
+        videoEl.srcObject = stream;
+
     }
     
+
+    async function handleOffer(msg, iceServers) {
+        const remoteId = msg.from ?? msg.user_id ?? msg.sender;
+        if (!remoteId) { console.warn('Offer missing remote id'); return; }
+
+        if (peerConnections[remoteId]) {
+            try { peerConnections[remoteId].close(); } catch (e) { }
+            delete peerConnections[remoteId];
+            removeRemoteVideo(remoteId);
+        }
+
+        const pc = new RTCPeerConnection({ iceServers: iceServers });
+        peerConnections[remoteId] = pc;
+
+        // Initialize transceivers
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+        pc.addTransceiver('video', { direction: 'sendrecv' });
+
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            const videoTrack = localStream.getVideoTracks()[0];
+
+            const transceivers = pc.getTransceivers();
+            if (audioTrack && transceivers[0]) {
+                transceivers[0].sender.replaceTrack(audioTrack);
+            }
+            if (videoTrack && transceivers[1]) {
+                transceivers[1].sender.replaceTrack(videoTrack);
+            }
+        }
+
+        pc.ontrack = (ev) => {
+            const stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
+            if (stream) addRemoteVideo(remoteId, `User ${remoteId}`, stream);
+        };
+
+        pc.onicecandidate = (ev) => {
+            if (ev.candidate) {
+                sendMessage({
+                    type: 'ice_candidate',
+                    target_user_id: remoteId,
+                    candidate: ev.candidate.candidate,
+                    sdp_mid: ev.candidate.sdpMid,
+                    sdp_m_line_index: ev.candidate.sdpMLineIndex
+                });
+            }
+        };
+
+        // Monitor connection state
+        pc.oniceconnectionstatechange = () => {
+            console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
+        };
+
+        pc.onconnectionstatechange = () => {
+            console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
+        };
+
+        try {
+            await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            sendMessage({ type: 'answer', target_user_id: remoteId, sdp: ans.sdp });
+        } catch (err) {
+            console.error('handleOffer error', err);
+        }
+    }
+
     function getUserInitials(userName) {
         const names = userName.split(' ');
         if (names.length === 1) {
@@ -239,6 +337,8 @@
     window.addEventListener('load', () => {
         const remoteVideos = document.getElementById('remoteVideos');
         updateVideoLayout(remoteVideos.children.length);
+
+        connect(parseInt('{{ user_id }}'));
     });
 
     // Demo: Simulate adding remote users
@@ -300,23 +400,288 @@
         }
     };
 
-
-    const 
-        iceServers = [
-            { urls: 'stun:stun.l.google.com:19302' },
-            {
-            urls: '{{ turn_credentials.urls|tojson }}',
-                username: '{{ turn_credentials.username }}',
-            credential: '{{ turn_credentials.credential }}'
-            }
-        ]
-    
-
     async function connect(userId) {
-        const roomId = document.getElementById('roomId').value;
-        const status = document.getElementById('status');
-        
 
+        try {
+            const iceServers = {{ ice_servers | safe }};
+            const roomId = '{{ room_id }}';
+            
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user" },
+                audio: true
+            });
+
+            const videoElement = document.getElementById('localVideo');
+            videoElement.srcObject = localStream;
+            videoElement.style.transform =  'scaleX(-1)';
+
+            const serverUrl = `http://localhost:8085/call/ws/rooms`;
+            ws = new WebSocket(`${serverUrl}/${roomId}`);
+
+            ws.onopen = () => {
+                sendMessage({ type: 'join', room_id: roomId, user_id: userId });
+            };
+
+            ws.onmessage = async (evt) => {
+                try {
+                    const msg = JSON.parse(evt.data);
+                    await handleSignalingMessage(msg, iceServers);
+                } catch (err) {
+                    console.error('Invalid message', err);
+                }
+            };
+
+            ws.onerror = (e) => console.error('WebSocket error', e);
+            ws.onclose = () => {
+                cleanup();
+            };
+
+        } catch (err) {
+            console.error('Failed to get media / TURN', err); alert('Could not access camera/microphone or TURN failed: ' + err);
+        }
+
+    }
+
+    async function handleSignalingMessage(msg, iceServers) {
+        switch (msg.type) {
+            case 'user-joined':
+                updateUsersList(msg.users);
+
+                (msg.users || []).forEach(([remoteId, username]) => {
+                    if (remoteId === userId) return;
+                    if (!peerConnections[remoteId]) {
+                        startConnection(remoteId, username, true, iceServers);
+                    }
+                });
+                break;
+
+            case 'offer':
+                await handleOffer(msg, iceServers);
+                break;
+
+            case 'answer':
+                {
+                    const remoteId = msg.from ?? msg.user_id ?? msg.sender;
+                    const pc = peerConnections[remoteId];
+                    if (pc) {
+                        if (pc.signalingState !== 'stable') {
+                            await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+                        } else {
+                            console.warn(`Answer received for peer ${remoteId} but signaling state is stable. Ignoring.`);
+                        }
+                    } else {
+                        console.warn('Answer for unknown peer', remoteId);
+                    }
+                }
+                break;
+
+            case 'ice-candidate':
+                {
+                    const remoteId = msg.from ?? msg.user_id ?? msg.sender;
+                    const pc = peerConnections[remoteId];
+                    if (pc && msg.candidate) {
+                        try {
+                            await pc.addIceCandidate({
+                                candidate: msg.candidate,
+                                sdpMid: msg.sdp_mid,
+                                sdpMLineIndex: msg.sdp_m_line_index
+                            });
+                        } catch (err) {
+                            console.warn('addIceCandidate failed', err);
+                        }
+                    }
+                }
+                break;
+
+            case 'user-left':
+                const uid = msg.user_id;
+                if (peerConnections[uid]) {
+                    try { peerConnections[uid].close(); } catch (e) { }
+                    delete peerConnections[uid];
+                }
+                removeRemoteVideo(uid);
+                updateUsersList(msg.users);
+                break;
+
+            case 'error':
+                console.error('Server error:', msg.message);
+                alert('Server error: ' + msg.message);
+                break;
+
+            default:
+                console.log('Unknown msg type', msg.type);
+        }
+    }
+
+
+    function startConnection(remoteId, label = '', isInitiator = false, iceServers) {
+        const pc = new RTCPeerConnection({ iceServers: iceServers });
+        peerConnections[remoteId] = pc;
+
+        // Initialize transceivers to maintain m-line order
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+        pc.addTransceiver('video', { direction: 'sendrecv' });
+
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            const videoTrack = localStream.getVideoTracks()[0];
+
+            const transceivers = pc.getTransceivers();
+            if (audioTrack && transceivers[0]) {
+                transceivers[0].sender.replaceTrack(audioTrack);
+            }
+            if (videoTrack && transceivers[1]) {
+                transceivers[1].sender.replaceTrack(videoTrack);
+            }
+        }
+
+        pc.ontrack = (ev) => {
+            const stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
+            if (stream) addRemoteVideo(remoteId, label || `User ${remoteId}`, stream);
+        };
+
+        pc.onicecandidate = (ev) => {
+            if (ev.candidate) {
+                sendMessage({
+                    type: 'ice_candidate',
+                    target_user_id: remoteId,
+                    candidate: ev.candidate.candidate,
+                    sdp_mid: ev.candidate.sdpMid,
+                    sdp_m_line_index: ev.candidate.sdpMLineIndex
+                });
+            }
+        };
+
+        let ieNegotiating = false;
+        pc.onnegotiationneeded = async () => {
+            if (!isInitiator || pc.signalingState !== 'stable' || isNegotiating) {
+                return;
+            }
+
+            try {
+                isNegotiating = true;
+                await pc.setLocalDescription();
+                sendMessage({
+                    type: 'offer',
+                    target_user_id: remoteId,
+                    sdp: pc.localDescription.sdp
+                });
+            } catch (err) {
+                console.error('onnegotiationneeded failed to create offer', err);
+            } finally {
+                isNegotiating = false;
+            }
+        };
+
+        // Monitor connection state to detect disconnections
+        pc.oniceconnectionstatechange = () => {
+            console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
+            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                console.warn(`Connection to ${remoteId} ${pc.iceConnectionState}. Attempting ICE restart...`);
+                // Optionally trigger ICE restart
+                setTimeout(() => {
+                    if (pc.iceConnectionState === 'disconnected' && isInitiator) {
+                        restartIce(remoteId);
+                    }
+                }, 3000);
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
+            if (pc.connectionState === 'failed') {
+                console.error(`Connection to ${remoteId} failed completely.`);
+            }
+        };
+
+        if (isInitiator) {
+            setTimeout(() => {
+                if (pc.signalingState === 'stable') {
+                    pc.dispatchEvent(new Event('negotiationneeded'));
+                }
+            }, 0);
+        }
+
+        return pc;
+    }
+
+    function sendMessage(msg) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+        }
+
+    }
+
+
+    function updateUsersList(users) {
+        let usersContent = document.getElementById('usersContent');
+        if (!users || users.length === 0) {
+            usersContent.textContent = 'None';
+        } else {
+            usersContent.innerHTML = users.map(u => {
+                const [id, name] = u;
+
+            return `
+                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                    <span>👤 ${name} ${id === userId ? '(You)' : ''}</span>
+                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+
+    function toggleMic() {
+        if (!localStream) return;
+        const track = localStream.getAudioTracks()[0];
+        if (!track) return;
+        track.enabled = !track.enabled;
+        const on = track.enabled;
+        micIcon.className = on ? "fa-solid fa-microphone" : "fa-solid fa-microphone-slash";
+        toggleMicBtn.classList.toggle('off', !on);
+    }
+
+
+    function toggleVideo() {
+        if (!localStream) return;
+        const track = localStream.getVideoTracks()[0];
+        if (!track) return;
+        track.enabled = !track.enabled;
+        const on = track.enabled;
+        videoIcon.className = on ? "fa-solid fa-video" : "fa-solid fa-video-slash";
+        toggleVideoBtn.classList.toggle('off', !on);
+    }
+
+    function leave() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            sendMessage({ type: 'leave', room_id: roomId });
+            ws.close();
+        }
+        cleanup();
+    }
+
+    function cleanup() {
+        Object.values(peerConnections).forEach(pc => {
+            try { pc.close(); } catch (e) { }
+        });
+        peerConnections = {};
+
+        if (localStream) localStream.getTracks().forEach(t => { try { t.stop(); } catch (e) { } });
+        localStream = null;
+
+        videosGrid.innerHTML = '';
+        updateUsersList([]);
+        videoContainer.classList.remove('active');
+        controlsRow.style.display = 'none';
+        joinContainer.style.display = 'block';
+        connectBtn.disabled = false;
+        leaveBtn.disabled = true;
+        toggleMicBtn.disabled = true;
+        toggleVideoBtn.disabled = true;
+        flipCameraBtn.disabled = true;
+        currentFacingMode = 'user';
+
+        updateStatus('Disconnected', false);
     }
 
 </script>

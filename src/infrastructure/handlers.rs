@@ -13,8 +13,8 @@ use sha1::Sha1;
 use tera::Context;
 
 use crate::{
-    infrastructure::{contract::TurnCredentials, templates::TEMPLATES},
-    shared::response::{AppError, respond_ok},
+    infrastructure::{contract::RoomIdQueryParam, templates::TEMPLATES},
+    shared::response::AppError,
     users::UserService,
 };
 
@@ -63,7 +63,10 @@ pub async fn index(
 }
 
 #[get("/turn-credentials")]
-pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Result<HttpResponse> {
+pub async fn get_turn_credentials(
+    identity: Option<Identity>,
+    room_id: web::Query<RoomIdQueryParam>,
+) -> actix_web::Result<HttpResponse> {
     let user_id: i32 = match identity
         .and_then(|id| id.id().ok())
         .and_then(|id_str| id_str.parse::<i32>().ok())
@@ -88,18 +91,23 @@ pub async fn get_turn_credentials(identity: Option<Identity>) -> actix_web::Resu
     let result = mac.finalize();
     let credential = general_purpose::STANDARD.encode(result.into_bytes());
 
-    let turn_credentials = TurnCredentials {
-        username,
-        credential,
-        urls: vec![
-            "stun:159.13.60.202:3478".to_string(),
-            "turn:159.13.60.202:3478".to_string(),
-        ],
-    };
+    let ice_servers = json!([
+        { "urls": "stun:stun.l.google.com:19302" },
+        {
+            "urls": vec![
+                "stun:159.13.60.202:3478".to_string(),
+                "turn:159.13.60.202:3478".to_string()
+            ],
+            "username": username,
+            "credential": credential
+        }
+    ]);
 
     let mut context = Context::new();
     context.insert("title", "Home Page");
-    context.insert("turn_credentials", &turn_credentials);
+    context.insert("user_id", &user_id);
+    context.insert("room_id", &room_id.room_id);
+    context.insert("ice_servers", &ice_servers.to_string());
 
     let rendered = TEMPLATES
         .render("videos.html", &context)

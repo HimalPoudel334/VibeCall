@@ -69,18 +69,18 @@
 </style>
 
 <script>
-        const connectBtn = document.getElementById('connectBtn');
+    const connectBtn = document.getElementById('connectBtn');
 
-        connectBtn.addEventListener('click', (e) => {
-            const roomId = encodeURIComponent(document.getElementById('roomId').value.trim());
+    connectBtn.addEventListener('click', (e) => {
+        const roomId = encodeURIComponent(document.getElementById('roomId').value.trim());
 
-            if (!roomId) {
-                e.preventDefault(); 
-                alert("Room ID is required");
-                return;
-            }
-            connectBtn.href = `/call/ws/video?roomId=${roomId}`;
-        });
+        if (!roomId) {
+            e.preventDefault(); 
+            alert("Room ID is required");
+            return;
+        }
+        connectBtn.href = `/turn-credentials?room_id=${roomId}`;
+    });
 
     
     document.getElementById('leaveBtn').addEventListener('click', function() {
