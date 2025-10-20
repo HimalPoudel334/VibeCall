@@ -145,7 +145,7 @@ async function connect(uid) {
 
         addVideoElement(userId, localStream, 'You');
 
-        const serverUrl = `http://localhost:8085/call/ws/rooms`;
+        const serverUrl = `/call/ws/rooms`;
         ws = new WebSocket(`${serverUrl}/${roomId}`);
 
         ws.onopen = () => {

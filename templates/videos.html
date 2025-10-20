@@ -113,39 +113,90 @@
     });
 
     // Control buttons (unchanged)
-    document.getElementById('toggleMicBtn').addEventListener('click', function() {
-
+    
+    // MIC TOGGLE
+    document.getElementById('toggleMicBtn').addEventListener('click', function () {
         if (!localStream) return;
         const track = localStream.getAudioTracks()[0];
         if (!track) return;
+    
         track.enabled = !track.enabled;
-        const on = track.enabled;
-
-        this.classList.toggle('bg-red-600');
-        const icon = this.querySelector('i');
-        icon.className = this.classList.contains('bg-teal-600') 
-            ? 'fa-solid fa-microphone-slash text-lg' 
-            : 'fa-solid fa-microphone text-lg';
+        const micIcon = document.getElementById('micIcon');
+    
+        if (!track.enabled) {
+            this.classList.add('bg-red-600');
+            micIcon.className = 'fa-solid fa-microphone-slash text-xs sm:text-sm md:text-lg';
+        } else {
+            this.classList.remove('bg-red-600');
+            micIcon.className = 'fa-solid fa-microphone text-xs sm:text-sm md:text-lg';
+        }
     });
-
-    document.getElementById('toggleVideoBtn').addEventListener('click', function() {
-
+    
+    // VIDEO TOGGLE
+    document.getElementById('toggleVideoBtn').addEventListener('click', async function () {
+        const videoBtn = this;
+        const videoIcon = document.getElementById('videoIcon');
+        const localVideoContainer = document.getElementById('localVideoContainer');
+        const localVideoElement = document.getElementById('localVideo'); 
+    
         if (!localStream) return;
+    
         const track = localStream.getVideoTracks()[0];
         if (!track) return;
-        track.enabled = !track.enabled;
-        const on = track.enabled;
-
-        this.classList.toggle('bg-red-600');
-        const icon = this.querySelector('i');
-        icon.className = this.classList.contains('bg-teal-600') 
-            ? 'fa-solid fa-video-slash text-lg' 
-            : 'fa-solid fa-video text-lg';
+    
+        // If track is live, stop it (disable camera completely)
+        if (track.readyState === 'live') {
+            track.stop(); // Fully turn off camera
+            localStream.removeTrack(track); // Remove from stream
+            videoBtn.classList.add('bg-red-600');
+            videoIcon.className = 'fa-solid fa-video-slash text-xs sm:text-sm md:text-lg';
+    
+            const placeholder = createPlaceholder('You This');
+            placeholder.classList.add('placeholder');
+            if (!localVideoContainer.querySelector('.placeholder')) {
+                localVideoContainer.appendChild(placeholder);
+            }
+    
+            // Remove video source
+            localVideoElement.srcObject = null;
+        } else {
+            // Restart video
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                localStream.addTrack(newVideoTrack); // Add track to existing stream
+    
+                videoBtn.classList.remove('bg-red-600');
+                videoIcon.className = 'fa-solid fa-video text-xs sm:text-sm md:text-lg';
+    
+                const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
+                if (existingPlaceholder) {
+                    existingPlaceholder.remove();
+                }
+    
+                localVideoElement.srcObject = localStream;
+            } catch (err) {
+                console.error('Failed to restart camera:', err);
+            }
+        }
     });
-
+    
     document.getElementById('flipCameraBtn').addEventListener('click', function() {
         this.classList.toggle('bg-teal-600');
     });
+
+    function createPlaceholder(userName) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'absolute inset-0 flex items-center justify-center bg-gray-700';
+        
+        const initials = getUserInitials(userName);
+        placeholder.innerHTML = `
+            <div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                ${initials}
+            </div>
+        `;
+        return placeholder;
+    }
 
     function addRemoteVideo(userId, userName, stream) {
 
@@ -161,19 +212,12 @@
             
             videoElement = document.createElement('video');
             videoElement.id = vidId;
-            videoElement.className = 'w-full h-full object-cover bg-gray-700'; // Using div as placeholder
+            videoElement.className = 'w-full h-full object-cover bg-gray-700';
             
             if(!stream) {
                 // Placeholder with initials
-                const placeholder = document.createElement('div');
-                placeholder.className = 'absolute inset-0 flex items-center justify-center bg-gray-700';
-                
-                const initials = getUserInitials(userName);
-                placeholder.innerHTML = `
-                    <div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
-                        ${initials}
-                    </div>
-                `;
+                const placeholder = createPlaceholder(userName);
+                videoContainer.appendChild(placeholder);
             }
             
             // Username overlay
@@ -183,7 +227,6 @@
             
             // Add elements
             videoContainer.appendChild(videoElement);
-            videoContainer.appendChild(placeholder);
             videoContainer.appendChild(userNameElement);
             remoteVideos.appendChild(videoContainer);
             
