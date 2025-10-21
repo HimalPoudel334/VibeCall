@@ -16,7 +16,7 @@
         </div>
 
         <div id="localVideoContainer" class="absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg z-10" style="max-height: 200px; max-width: 300px;">
-            <video id="localVideo" class="w-full h-full object-cover" autoplay muted></video>
+            <video id="localVideo" class="w-full h-full object-cover" autoplay></video>
             <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm">You</div>
         </div>
 
@@ -65,19 +65,19 @@
     <!-- Controls -->
     <div class="py-4 flex items-center justify-center bg-teal-900/90" style="height: 80px;">
         <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap justify-center max-w-[90vw]">
-            <button id="toggleMicBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Mic">
+            <button id="toggleMicBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Mic">
                 <i id="micIcon" class="fa-solid fa-microphone text-xs sm:text-sm md:text-lg"></i>
             </button>
-            <button id="toggleVideoBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Video">
+            <button id="toggleVideoBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Toggle Video">
                 <i id="videoIcon" class="fa-solid fa-video text-xs sm:text-sm md:text-lg"></i>
             </button>
-            <button id="flipCameraBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Flip Camera">
+            <button id="flipCameraBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Flip Camera">
                 <i class="fa-solid fa-camera-rotate text-xs sm:text-sm md:text-lg"></i>
             </button>
-            <button id="userMessageBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Messages">
+            <button id="userMessageBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-gray-600 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Messages">
                 <i class="fa-solid fa-comment text-xs sm:text-sm md:text-lg"></i>
             </button>
-            <button id="usersListToggle" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Users List">
+            <button id="usersListToggle" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-teal-600 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="Users List">
                 <i class="fa-solid fa-users text-xs sm:text-sm md:text-lg"></i>
             </button>
             <button id="endCallBtn" class="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all duration-200 hover:scale-110" title="End Call">
@@ -90,7 +90,6 @@
 <script>
     let ws = null;
     let peerConnections = {};
-    const userId = '{{ user_id }}';
     let localStream = null;
 
     // Users list toggle functionality
@@ -101,6 +100,7 @@
             messagePanel.classList.add('hidden');
         }
         usersPanel.classList.toggle('hidden');
+        this.classList.toggle('bg-teal-600');
     });
 
     document.getElementById('userMessageBtn').addEventListener('click', function() {
@@ -113,7 +113,6 @@
     });
 
     // Control buttons (unchanged)
-    
     // MIC TOGGLE
     document.getElementById('toggleMicBtn').addEventListener('click', function () {
         if (!localStream) return;
@@ -131,59 +130,95 @@
             micIcon.className = 'fa-solid fa-microphone text-xs sm:text-sm md:text-lg';
         }
     });
+
+const toggleVideoBtn = document.getElementById('toggleVideoBtn');
+// VIDEO TOGGLE
+toggleVideoBtn.addEventListener('click', async function () {
+    const videoBtn = this;
+    const videoIcon = document.getElementById('videoIcon');
+    const localVideoContainer = document.getElementById('localVideoContainer');
+    const localVideoElement = document.getElementById('localVideo');
     
-    // VIDEO TOGGLE
-    document.getElementById('toggleVideoBtn').addEventListener('click', async function () {
-        const videoBtn = this;
-        const videoIcon = document.getElementById('videoIcon');
-        const localVideoContainer = document.getElementById('localVideoContainer');
-        const localVideoElement = document.getElementById('localVideo'); 
+    if (!localStream) return;
     
-        if (!localStream) return;
+    const videoTracks = localStream.getVideoTracks();
+    const isVideoEnabled = videoTracks.length > 0 && videoTracks[0].readyState === 'live';
     
-        const track = localStream.getVideoTracks()[0];
-        if (!track) return;
-    
-        // If track is live, stop it (disable camera completely)
-        if (track.readyState === 'live') {
-            track.stop(); // Fully turn off camera
-            localStream.removeTrack(track); // Remove from stream
-            videoBtn.classList.add('bg-red-600');
-            videoIcon.className = 'fa-solid fa-video-slash text-xs sm:text-sm md:text-lg';
-    
-            const placeholder = createPlaceholder('You This');
-            placeholder.classList.add('placeholder');
-            if (!localVideoContainer.querySelector('.placeholder')) {
-                localVideoContainer.appendChild(placeholder);
-            }
-    
-            // Remove video source
-            localVideoElement.srcObject = null;
-        } else {
-            // Restart video
-            try {
-                const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                const newVideoTrack = newStream.getVideoTracks()[0];
-                localStream.addTrack(newVideoTrack); // Add track to existing stream
-    
-                videoBtn.classList.remove('bg-red-600');
-                videoIcon.className = 'fa-solid fa-video text-xs sm:text-sm md:text-lg';
-    
-                const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
-                if (existingPlaceholder) {
-                    existingPlaceholder.remove();
-                }
-    
-                localVideoElement.srcObject = localStream;
-            } catch (err) {
-                console.error('Failed to restart camera:', err);
-            }
+    if (isVideoEnabled) {
+        // ===== TURN VIDEO OFF =====
+        videoTracks.forEach(track => {
+            track.stop();
+            localStream.removeTrack(track);
+        });
+        
+        // Properly release video element
+        localVideoElement.pause();
+        localVideoElement.srcObject = null;
+        localVideoElement.load();
+        
+        videoBtn.classList.add('bg-red-600');
+        videoIcon.className = 'fa-solid fa-video-slash text-xs sm:text-sm md:text-lg';
+        
+        // Show placeholder
+        const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
+        if (existingPlaceholder) {
+            existingPlaceholder.remove();
         }
-    });
+        
+        const placeholder = createPlaceholder('You This');
+        placeholder.classList.add('placeholder');
+        localVideoContainer.appendChild(placeholder);
+        
+        console.log('Video turned OFF - camera released');
+        
+    } else {
+        // ===== TURN VIDEO ON =====
+        try {
+            const newStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }
+            });
+            const newVideoTrack = newStream.getVideoTracks()[0];
+            
+            // Add to local stream
+            localStream.addTrack(newVideoTrack);
+            
+            // Add to peer connections if they exist
+            if (typeof peerConnections !== 'undefined') {
+                Object.values(peerConnections).forEach(pc => {
+                    pc.addTrack(newVideoTrack, localStream);
+                });
+            }
+            
+            videoBtn.classList.remove('bg-red-600');
+            videoIcon.className = 'fa-solid fa-video text-xs sm:text-sm md:text-lg';
+            
+            // Remove placeholder
+            const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
+            if (existingPlaceholder) {
+                existingPlaceholder.remove();
+            }
+            
+            // Setup video element
+            localVideoElement.srcObject = localStream;
+            localVideoElement.style.transform = 'scaleX(-1)';
+            await localVideoElement.play();
+            
+            // Stop audio from new stream (avoid duplicates)
+            newStream.getAudioTracks().forEach(track => track.stop());
+            
+            console.log('Video turned ON');
+            
+        } catch (err) {
+            console.error('Failed to start camera:', err);
+            alert('Could not access camera: ' + err.message);
+        }
+    }
+});
     
     document.getElementById('flipCameraBtn').addEventListener('click', function() {
         this.classList.toggle('bg-teal-600');
     });
+
 
     function createPlaceholder(userName) {
         const placeholder = document.createElement('div');
@@ -215,7 +250,6 @@
             videoElement.className = 'w-full h-full object-cover bg-gray-700';
             
             if(!stream) {
-                // Placeholder with initials
                 const placeholder = createPlaceholder(userName);
                 videoContainer.appendChild(placeholder);
             }
@@ -234,7 +268,7 @@
             updateVideoLayout(remoteVideos.children.length);
         }
 
-        videoEl.srcObject = stream;
+        videoElement.srcObject = stream;
 
     }
     
@@ -386,34 +420,11 @@
 
     // Demo: Simulate adding remote users
     setTimeout(() => {
-        addRemoteVideo('user1', 'User 1');
-        addRemoteVideo('user2', 'User 2');
-        addRemoteVideo('user3', 'User 3');
-        addRemoteVideo('user4', 'User 4');
+        //addRemoteVideo('user1', 'User 1');
+        // addRemoteVideo('user2', 'User 2');
+        // addRemoteVideo('user3', 'User 3');
+        // addRemoteVideo('user4', 'User 4');
         
-        // Update users list
-        document.getElementById('usersContent').innerHTML = `
-            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                <span>You</span>
-                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-            </div>
-            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                <span>User 1</span>
-                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-            </div>
-            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                <span>User 2</span>
-                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-            </div>
-            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                <span>User 3</span>
-                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-            </div>
-            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                <span>User 4</span>
-                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-            </div>
-        `;
     }, 1000);
 
     const sendUserMessageBtn = document.getElementById('sendUserMessage');
@@ -443,49 +454,48 @@
         }
     };
 
-    async function connect(userId) {
-
-        try {
-            const iceServers = {{ ice_servers | safe }};
-            const roomId = '{{ room_id }}';
-            
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user" },
-                audio: true
-            });
-
-            const videoElement = document.getElementById('localVideo');
-            videoElement.srcObject = localStream;
-            videoElement.style.transform =  'scaleX(-1)';
-
-            const serverUrl = `http://localhost:8085/call/ws/rooms`;
-            ws = new WebSocket(`${serverUrl}/${roomId}`);
-
-            ws.onopen = () => {
-                sendMessage({ type: 'join', room_id: roomId, user_id: userId });
-            };
-
-            ws.onmessage = async (evt) => {
-                try {
-                    const msg = JSON.parse(evt.data);
-                    await handleSignalingMessage(msg, iceServers);
-                } catch (err) {
-                    console.error('Invalid message', err);
-                }
-            };
-
-            ws.onerror = (e) => console.error('WebSocket error', e);
-            ws.onclose = () => {
-                cleanup();
-            };
-
-        } catch (err) {
-            console.error('Failed to get media / TURN', err); alert('Could not access camera/microphone or TURN failed: ' + err);
-        }
-
+async function connect(userId) {
+    try {
+        const iceServers = {{ ice_servers | safe }};
+        const roomId = '{{ room_id }}';
+        
+        // ONLY get audio initially - NO VIDEO
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+                video: { facingMode: "user" }
+        });
+        
+        const videoElement = document.getElementById('localVideo');
+        videoElement.srcObject = localStream;
+        videoElement.style.transform = 'scaleX(-1)';
+        
+        const serverUrl = `http://localhost:8085/call/ws/rooms`;
+        ws = new WebSocket(`${serverUrl}/${roomId}`);
+        
+        ws.onopen = () => {
+            sendMessage({ type: 'join', room_id: roomId, user_id: userId });
+        };
+        
+        ws.onmessage = async (evt) => {
+            try {
+                const msg = JSON.parse(evt.data);
+                await handleSignalingMessage(userId, msg, iceServers);
+            } catch (err) {
+                console.error('Invalid message', err);
+            }
+        };
+        
+        ws.onerror = (e) => console.error('WebSocket error', e);
+        ws.onclose = () => {
+            cleanup();
+        };
+    } catch (err) {
+        console.error('Failed to get media / TURN', err);
+        alert('Could not access camera/microphone or TURN failed: ' + err);
     }
+}
 
-    async function handleSignalingMessage(msg, iceServers) {
+    async function handleSignalingMessage(userId, msg, iceServers) {
         switch (msg.type) {
             case 'user-joined':
                 updateUsersList(msg.users);
@@ -671,28 +681,6 @@
                 </div>`;
             }).join('');
         }
-    }
-
-
-    function toggleMic() {
-        if (!localStream) return;
-        const track = localStream.getAudioTracks()[0];
-        if (!track) return;
-        track.enabled = !track.enabled;
-        const on = track.enabled;
-        micIcon.className = on ? "fa-solid fa-microphone" : "fa-solid fa-microphone-slash";
-        toggleMicBtn.classList.toggle('off', !on);
-    }
-
-
-    function toggleVideo() {
-        if (!localStream) return;
-        const track = localStream.getVideoTracks()[0];
-        if (!track) return;
-        track.enabled = !track.enabled;
-        const on = track.enabled;
-        videoIcon.className = on ? "fa-solid fa-video" : "fa-solid fa-video-slash";
-        toggleVideoBtn.classList.toggle('off', !on);
     }
 
     function leave() {
