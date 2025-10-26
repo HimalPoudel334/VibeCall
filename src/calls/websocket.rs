@@ -1,8 +1,6 @@
 use actix_identity::Identity;
 use actix_web::{
-    HttpRequest, HttpResponse, Result as ActixResult, get,
-    http::header::{self, ContentType},
-    rt, web,
+    HttpRequest, HttpResponse, Result as ActixResult, get, http::header::ContentType, rt, web,
 };
 use actix_ws::{AggregatedMessage, CloseReason, handle};
 use futures::StreamExt;
@@ -30,23 +28,16 @@ pub enum OutgoingMessage {
 pub async fn websocket_handler(
     req: HttpRequest,
     stream: web::Payload,
-    identity: Option<Identity>,
+    identity: Identity,
     room_id: web::Path<String>,
     server: web::Data<Arc<SignalingServer>>,
 ) -> ActixResult<HttpResponse> {
     println!("Hit by client");
     let room_id = room_id.into_inner();
-    let user_id: i32 = match identity
-        .and_then(|id| id.id().ok())
-        .and_then(|id_str| id_str.parse::<i32>().ok())
-    {
-        Some(id) => id,
-        None => {
-            return Ok(HttpResponse::Found()
-                .append_header((header::LOCATION, "/vibecall/auth/login"))
-                .finish());
-        }
-    };
+    let user_id: i32 = identity
+        .id()?
+        .parse::<i32>()
+        .map_err(|_| AppError::BadRequest("Invalid user ID".to_string()))?;
 
     println!("room_id: {room_id} and user_id: {user_id}");
 

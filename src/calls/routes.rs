@@ -1,10 +1,14 @@
-use actix_web::web;
+use actix_web::{middleware, web};
 
-use crate::calls::{handlers, websocket};
+use crate::{
+    calls::{handlers, websocket},
+    infrastructure::middlewares::auth_middleware,
+};
 
 pub fn call_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/call")
+            .wrap(middleware::from_fn(auth_middleware::auth))
             .service(websocket::websocket_handler)
             .service(websocket::test_videocall)
             .service(handlers::update_call_status)

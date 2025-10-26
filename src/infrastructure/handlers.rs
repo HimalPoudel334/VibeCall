@@ -1,11 +1,7 @@
 use std::sync::Arc;
 
 use actix_identity::Identity;
-use actix_web::{
-    HttpResponse, get,
-    http::header::{self, ContentType},
-    web,
-};
+use actix_web::{HttpResponse, get, http::header::ContentType, web};
 use base64::{Engine as _, engine::general_purpose};
 use hmac::{Hmac, Mac};
 use serde_json::json;
@@ -29,20 +25,13 @@ pub async fn health_check() -> actix_web::Result<HttpResponse> {
 
 #[get("/")]
 pub async fn index(
-    identity: Option<Identity>,
+    identity: Identity,
     user_service: web::Data<Arc<dyn UserService>>,
 ) -> actix_web::Result<HttpResponse> {
-    let user_id: i32 = match identity
-        .and_then(|id| id.id().ok())
-        .and_then(|id_str| id_str.parse::<i32>().ok())
-    {
-        Some(id) => id,
-        None => {
-            return Ok(HttpResponse::Found()
-                .append_header((header::LOCATION, "/auth/login"))
-                .finish());
-        }
-    };
+    let user_id: i32 = identity
+        .id()?
+        .parse::<i32>()
+        .map_err(|_| AppError::BadRequest("Invalid User Id".to_string()))?;
 
     let user = user_service
         .get_by_id(user_id)
@@ -64,20 +53,13 @@ pub async fn index(
 
 #[get("/turn-credentials")]
 pub async fn get_turn_credentials(
-    identity: Option<Identity>,
+    identity: Identity,
     room_id: web::Query<RoomIdQueryParam>,
 ) -> actix_web::Result<HttpResponse> {
-    let user_id: i32 = match identity
-        .and_then(|id| id.id().ok())
-        .and_then(|id_str| id_str.parse::<i32>().ok())
-    {
-        Some(id) => id,
-        None => {
-            return Ok(HttpResponse::Found()
-                .append_header((header::LOCATION, "/auth/login"))
-                .finish());
-        }
-    };
+    let user_id: i32 = identity
+        .id()?
+        .parse::<i32>()
+        .map_err(|_| AppError::BadRequest("Invalid User Id".to_string()))?;
 
     let shared_secret = "MyVerySecretKey12345";
     let ttl = 86400;

@@ -92,128 +92,101 @@
     let peerConnections = {};
     let localStream = null;
 
-    // Users list toggle functionality
-    document.getElementById('usersListToggle').addEventListener('click', function() {
-        const messagePanel = document.getElementById('userMessagePanel');
-        const usersPanel = document.getElementById('usersListPanel');
-        if (!messagePanel.classList.contains('hidden')) {
-            messagePanel.classList.add('hidden');
-        }
-        usersPanel.classList.toggle('hidden');
-        this.classList.toggle('bg-teal-600');
-    });
-
-    document.getElementById('userMessageBtn').addEventListener('click', function() {
-        const usersPanel = document.getElementById('usersListPanel');
-        const messagePanel = document.getElementById('userMessagePanel');
-        if (!usersPanel.classList.contains('hidden')) {
-            usersPanel.classList.add('hidden');
-        }
-        messagePanel.classList.toggle('hidden');
-    });
-
-    // Control buttons (unchanged)
-    // MIC TOGGLE
-    document.getElementById('toggleMicBtn').addEventListener('click', function () {
+    // VIDEO TOGGLE
+    const toggleVideoBtn = document.getElementById('toggleVideoBtn');
+    // VIDEO TOGGLE
+    toggleVideoBtn.addEventListener('click', async function () {
+        const videoBtn = this;
+        const videoIcon = document.getElementById('videoIcon');
+        const localVideoContainer = document.getElementById('localVideoContainer');
+        const localVideoElement = document.getElementById('localVideo');
+        
         if (!localStream) return;
-        const track = localStream.getAudioTracks()[0];
-        if (!track) return;
-    
-        track.enabled = !track.enabled;
-        const micIcon = document.getElementById('micIcon');
-    
-        if (!track.enabled) {
-            this.classList.add('bg-red-600');
-            micIcon.className = 'fa-solid fa-microphone-slash text-xs sm:text-sm md:text-lg';
-        } else {
-            this.classList.remove('bg-red-600');
-            micIcon.className = 'fa-solid fa-microphone text-xs sm:text-sm md:text-lg';
-        }
-    });
-
-const toggleVideoBtn = document.getElementById('toggleVideoBtn');
-// VIDEO TOGGLE
-toggleVideoBtn.addEventListener('click', async function () {
-    const videoBtn = this;
-    const videoIcon = document.getElementById('videoIcon');
-    const localVideoContainer = document.getElementById('localVideoContainer');
-    const localVideoElement = document.getElementById('localVideo');
-    
-    if (!localStream) return;
-    
-    const videoTracks = localStream.getVideoTracks();
-    const isVideoEnabled = videoTracks.length > 0 && videoTracks[0].readyState === 'live';
-    
-    if (isVideoEnabled) {
-        // ===== TURN VIDEO OFF =====
-        videoTracks.forEach(track => {
-            track.stop();
-            localStream.removeTrack(track);
-        });
         
-        // Properly release video element
-        localVideoElement.pause();
-        localVideoElement.srcObject = null;
-        localVideoElement.load();
+        const videoTracks = localStream.getVideoTracks();
+        const isVideoEnabled = videoTracks.length > 0 && videoTracks[0].readyState === 'live';
         
-        videoBtn.classList.add('bg-red-600');
-        videoIcon.className = 'fa-solid fa-video-slash text-xs sm:text-sm md:text-lg';
-        
-        // Show placeholder
-        const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
-        if (existingPlaceholder) {
-            existingPlaceholder.remove();
-        }
-        
-        const placeholder = createPlaceholder('You This');
-        placeholder.classList.add('placeholder');
-        localVideoContainer.appendChild(placeholder);
-        
-        console.log('Video turned OFF - camera released');
-        
-    } else {
-        // ===== TURN VIDEO ON =====
-        try {
-            const newStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "user" }
+        if (isVideoEnabled) {
+            // ===== TURN VIDEO OFF =====
+            videoTracks.forEach(track => {
+                track.stop();
+                localStream.removeTrack(track);
             });
-            const newVideoTrack = newStream.getVideoTracks()[0];
             
-            // Add to local stream
-            localStream.addTrack(newVideoTrack);
-            
-            // Add to peer connections if they exist
+            // Update peer connections - remove video track
             if (typeof peerConnections !== 'undefined') {
                 Object.values(peerConnections).forEach(pc => {
-                    pc.addTrack(newVideoTrack, localStream);
+                    const senders = pc.getSenders();
+                    senders.forEach(sender => {
+                        if (sender.track && sender.track.kind === 'video') {
+                            pc.removeTrack(sender);
+                        }
+                    });
                 });
             }
             
-            videoBtn.classList.remove('bg-red-600');
-            videoIcon.className = 'fa-solid fa-video text-xs sm:text-sm md:text-lg';
+            // Properly release video element
+            localVideoElement.pause();
+            localVideoElement.srcObject = null;
+            localVideoElement.load();
             
-            // Remove placeholder
+            videoBtn.classList.add('bg-red-600');
+            videoIcon.className = 'fa-solid fa-video-slash text-xs sm:text-sm md:text-lg';
+            
+            // Show placeholder
             const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
             if (existingPlaceholder) {
                 existingPlaceholder.remove();
             }
             
-            // Setup video element
-            localVideoElement.srcObject = localStream;
-            localVideoElement.style.transform = 'scaleX(-1)';
-            await localVideoElement.play();
+            const placeholder = createPlaceholder('You This');
+            placeholder.classList.add('placeholder');
+            localVideoContainer.appendChild(placeholder);
             
-            // Stop audio from new stream (avoid duplicates)
-            newStream.getAudioTracks().forEach(track => track.stop());
+            console.log('Video turned OFF - camera released');
             
-            console.log('Video turned ON');
-            
-        } catch (err) {
-            console.error('Failed to start camera:', err);
-            alert('Could not access camera: ' + err.message);
+        } else {
+            // ===== TURN VIDEO ON =====
+            try {
+                // Request ONLY video, don't request audio
+                const newStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }
+                    // NO audio: true here
+                });
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                
+                // Add to local stream
+                localStream.addTrack(newVideoTrack);
+                
+                // Add to peer connections if they exist
+                if (typeof peerConnections !== 'undefined') {
+                    Object.values(peerConnections).forEach(pc => {
+                        pc.addTrack(newVideoTrack, localStream);
+                    });
+                }
+                
+                videoBtn.classList.remove('bg-red-600');
+                videoIcon.className = 'fa-solid fa-video text-xs sm:text-sm md:text-lg';
+                
+                // Remove placeholder
+                const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
+                if (existingPlaceholder) {
+                    existingPlaceholder.remove();
+                }
+                
+                // Setup video element - reassign the entire stream
+                localVideoElement.srcObject = localStream;
+                localVideoElement.style.transform = 'scaleX(-1)';
+                await localVideoElement.play();
+                
+                console.log('Video turned ON');
+                
+            } catch (err) {
+                console.error('Failed to start camera:', err);
+                alert('Could not access camera: ' + err.message);
+            }
         }
-    }
-});
+    });
     
     document.getElementById('flipCameraBtn').addEventListener('click', function() {
         this.classList.toggle('bg-teal-600');
@@ -454,46 +427,46 @@ toggleVideoBtn.addEventListener('click', async function () {
         }
     };
 
-async function connect(userId) {
-    try {
-        const iceServers = {{ ice_servers | safe }};
-        const roomId = '{{ room_id }}';
-        
-        // ONLY get audio initially - NO VIDEO
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-                video: { facingMode: "user" }
-        });
-        
-        const videoElement = document.getElementById('localVideo');
-        videoElement.srcObject = localStream;
-        videoElement.style.transform = 'scaleX(-1)';
-        
-        const serverUrl = `http://localhost:8085/call/ws/rooms`;
-        ws = new WebSocket(`${serverUrl}/${roomId}`);
-        
-        ws.onopen = () => {
-            sendMessage({ type: 'join', room_id: roomId, user_id: userId });
-        };
-        
-        ws.onmessage = async (evt) => {
-            try {
-                const msg = JSON.parse(evt.data);
-                await handleSignalingMessage(userId, msg, iceServers);
-            } catch (err) {
-                console.error('Invalid message', err);
-            }
-        };
-        
-        ws.onerror = (e) => console.error('WebSocket error', e);
-        ws.onclose = () => {
-            cleanup();
-        };
-    } catch (err) {
-        console.error('Failed to get media / TURN', err);
-        alert('Could not access camera/microphone or TURN failed: ' + err);
+    async function connect(userId) {
+        try {
+            const iceServers = {{ ice_servers | safe }};
+            const roomId = '{{ room_id }}';
+            
+            // ONLY get audio initially - NO VIDEO
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                    video: { facingMode: "user" }
+            });
+            
+            const videoElement = document.getElementById('localVideo');
+            videoElement.srcObject = localStream;
+            videoElement.style.transform = 'scaleX(-1)';
+            
+            const serverUrl = `http://localhost:8085/call/ws/rooms`;
+            ws = new WebSocket(`${serverUrl}/${roomId}`);
+            
+            ws.onopen = () => {
+                sendMessage({ type: 'join', room_id: roomId, user_id: userId });
+            };
+            
+            ws.onmessage = async (evt) => {
+                try {
+                    const msg = JSON.parse(evt.data);
+                    await handleSignalingMessage(userId, msg, iceServers);
+                } catch (err) {
+                    console.error('Invalid message', err);
+                }
+            };
+            
+            ws.onerror = (e) => console.error('WebSocket error', e);
+            ws.onclose = () => {
+                cleanup();
+            };
+        } catch (err) {
+            console.error('Failed to get media / TURN', err);
+            alert('Could not access camera/microphone or TURN failed: ' + err);
+        }
     }
-}
 
     async function handleSignalingMessage(userId, msg, iceServers) {
         switch (msg.type) {
@@ -667,6 +640,7 @@ async function connect(userId) {
 
 
     function updateUsersList(users) {
+        const currentUserId = parseInt('{{ user_id }}');
         let usersContent = document.getElementById('usersContent');
         if (!users || users.length === 0) {
             usersContent.textContent = 'None';
@@ -676,7 +650,7 @@ async function connect(userId) {
 
             return `
                 <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                    <span>👤 ${name} ${id === userId ? '(You)' : ''}</span>
+                    <span>👤 ${name} ${id === currentUserId ? '(You)' : ''}</span>
                     <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
                 </div>`;
             }).join('');
@@ -714,6 +688,46 @@ async function connect(userId) {
 
         updateStatus('Disconnected', false);
     }
+
+
+    // Users list toggle functionality
+    document.getElementById('usersListToggle').addEventListener('click', function() {
+        const messagePanel = document.getElementById('userMessagePanel');
+        const usersPanel = document.getElementById('usersListPanel');
+        if (!messagePanel.classList.contains('hidden')) {
+            messagePanel.classList.add('hidden');
+        }
+        usersPanel.classList.toggle('hidden');
+        this.classList.toggle('bg-teal-600');
+    });
+
+    document.getElementById('userMessageBtn').addEventListener('click', function() {
+        const usersPanel = document.getElementById('usersListPanel');
+        const messagePanel = document.getElementById('userMessagePanel');
+        if (!usersPanel.classList.contains('hidden')) {
+            usersPanel.classList.add('hidden');
+        }
+        messagePanel.classList.toggle('hidden');
+    });
+
+    // Control buttons (unchanged)
+    // MIC TOGGLE
+    document.getElementById('toggleMicBtn').addEventListener('click', function () {
+        if (!localStream) return;
+        const track = localStream.getAudioTracks()[0];
+        if (!track) return;
+    
+        track.enabled = !track.enabled;
+        const micIcon = document.getElementById('micIcon');
+    
+        if (!track.enabled) {
+            this.classList.add('bg-red-600');
+            micIcon.className = 'fa-solid fa-microphone-slash text-xs sm:text-sm md:text-lg';
+        } else {
+            this.classList.remove('bg-red-600');
+            micIcon.className = 'fa-solid fa-microphone text-xs sm:text-sm md:text-lg';
+        }
+    });
 
 </script>
 {% endblock %}

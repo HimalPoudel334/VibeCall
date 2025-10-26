@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use actix_identity::Identity;
+use actix_session::Session;
 use actix_web::{
-    HttpMessage, HttpResponse, Responder, get,
-    http::{StatusCode, header::ContentType},
+    HttpMessage, HttpResponse, get,
+    http::header::{self, ContentType},
     post, web,
 };
 use tera::Context;
@@ -43,26 +44,45 @@ pub async fn register() -> actix_web::Result<HttpResponse> {
 
 #[post("/login")]
 pub async fn login_post(
-    data: web::Form<LoginRequest>,
-    user_service: web::Data<Arc<dyn UserService>>,
     req: actix_web::HttpRequest,
-) -> actix_web::Result<impl Responder> {
-    let user = user_service
-        .authenticate(&data.username, &data.password)
-        .await?;
+    form: web::Form<LoginRequest>,
+    session: Session,
+    user_service: web::Data<Arc<dyn UserService>>,
+) -> actix_web::Result<HttpResponse> {
+    let user = match user_service
+        .authenticate(&form.username, &form.password)
+        .await
+    {
+        Ok(user) => user,
+        Err(err) => {
+            let mut context = Context::new();
+            context.insert("title", "Login");
+            context.insert("error", &err.to_string());
+            context.insert("username", &form.username);
+
+            let rendered = TEMPLATES.render("login.html", &context).unwrap();
+
+            return Ok(HttpResponse::Ok()
+                .content_type(ContentType::html())
+                .body(rendered));
+        }
+    };
 
     Identity::login(&req.extensions(), user.id.to_string())?;
 
-    Ok(web::Redirect::to("/").using_status_code(StatusCode::FOUND))
+    let redirect_path = session
+        .get::<String>("redirect_after_login")?
+        .unwrap_or_else(|| "/".to_string());
 
-    // let mut context = Context::new();
-    // context.insert("user", &user);
-    //
-    // let rendered = TEMPLATES
-    //     .render("index.html", &context)
-    //     .map_err(|e| AppError::InternalServerError(e.to_string()))?;
-    //
-    // Ok(HttpResponse::Ok()
-    //     .content_type(ContentType::html())
-    //     .body(rendered))
+    session.remove("redirect_after_login");
+
+    let safe_redirect = if redirect_path.starts_with('/') && !redirect_path.starts_with("//") {
+        redirect_path
+    } else {
+        "/".to_string()
+    };
+
+    Ok(HttpResponse::Found()
+        .append_header((header::LOCATION, safe_redirect))
+        .finish())
 }
