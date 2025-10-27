@@ -72,15 +72,17 @@ pub async fn login_post(
 
     let redirect_path = session
         .get::<String>("redirect_after_login")?
-        .unwrap_or_else(|| "/".to_string());
+        .unwrap_or_else(|| "/vibecall".to_string());
 
     session.remove("redirect_after_login");
 
     let safe_redirect = if redirect_path.starts_with('/') && !redirect_path.starts_with("//") {
         redirect_path
     } else {
-        "/".to_string()
+        "/vibecall".to_string()
     };
+
+    println!("Redirecting to: {}", safe_redirect);
 
     Ok(HttpResponse::Found()
         .append_header((header::LOCATION, safe_redirect))

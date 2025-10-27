@@ -16,7 +16,7 @@
         </div>
 
         <div id="localVideoContainer" class="absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg z-10" style="max-height: 200px; max-width: 300px;">
-            <video id="localVideo" class="w-full h-full object-cover" autoplay></video>
+            <video id="localVideo" class="w-full h-full object-cover" autoplay muted></video>
             <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm">You</div>
         </div>
 
@@ -91,6 +91,7 @@
     let ws = null;
     let peerConnections = {};
     let localStream = null;
+    const remoteStreams = {}; // Track streams by user ID
 
     // VIDEO TOGGLE
     const toggleVideoBtn = document.getElementById('toggleVideoBtn');
@@ -139,7 +140,7 @@
                 existingPlaceholder.remove();
             }
             
-            const placeholder = createPlaceholder('You This');
+            const placeholder = createPlaceholder('Y O U');
             placeholder.classList.add('placeholder');
             localVideoContainer.appendChild(placeholder);
             
@@ -192,6 +193,8 @@
         this.classList.toggle('bg-teal-600');
     });
 
+    document.getElementById('endCallBtn').addEventListener('click', leave);
+
 
     function createPlaceholder(userName) {
         const placeholder = document.createElement('div');
@@ -207,11 +210,16 @@
     }
 
     function addRemoteVideo(userId, userName, stream) {
-
+        console.log(`[addRemoteVideo] Called for user ${userId}`, {
+            streamId: stream?.id,
+            tracks: stream?.getTracks().map(t => `${t.kind}:${t.readyState}`)
+        });
+        
         const vidId = `video-${userId}`;
         let videoElement = document.getElementById(vidId);
-
+        
         if (!videoElement) {
+            console.log(`[addRemoteVideo] Creating new video element for ${userId}`);
             const remoteVideos = document.getElementById('remoteVideos');
             
             const videoContainer = document.createElement('div');
@@ -221,11 +229,9 @@
             videoElement = document.createElement('video');
             videoElement.id = vidId;
             videoElement.className = 'w-full h-full object-cover bg-gray-700';
-            
-            if(!stream) {
-                const placeholder = createPlaceholder(userName);
-                videoContainer.appendChild(placeholder);
-            }
+            videoElement.autoplay = true;
+            videoElement.playsInline = true;
+            videoElement.muted = false;
             
             // Username overlay
             const userNameElement = document.createElement('div');
@@ -239,76 +245,87 @@
             
             // Update layout
             updateVideoLayout(remoteVideos.children.length);
+            
+            console.log(`[addRemoteVideo] Video element created for ${userId}`);
+        } else {
+            console.log(`[addRemoteVideo] Video element already exists for ${userId}`);
         }
-
-        videoElement.srcObject = stream;
-
+        
+        // Only set srcObject if it's different or not set
+        if (videoElement.srcObject !== stream) {
+            console.log(`[addRemoteVideo] Setting srcObject for ${userId}`);
+            videoElement.srcObject = stream;
+            
+            // Wait for metadata before playing
+            videoElement.onloadedmetadata = () => {
+                console.log(`[addRemoteVideo] ✅ Metadata loaded for ${userId}`, {
+                    width: videoElement.videoWidth,
+                    height: videoElement.videoHeight
+                });
+                
+                videoElement.play()
+                    .then(() => {
+                        console.log(`[addRemoteVideo] ✅ play() succeeded for ${userId}`);
+                    })
+                    .catch(err => {
+                        console.error(`[addRemoteVideo] ❌ play() failed for ${userId}:`, err);
+                        
+                        // Fallback: muted autoplay
+                        if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+                            console.log(`[addRemoteVideo] Trying muted autoplay for ${userId}`);
+                            videoElement.muted = true;
+                            videoElement.play()
+                                .then(() => {
+                                    setTimeout(() => {
+                                        videoElement.muted = false;
+                                        console.log(`[addRemoteVideo] Unmuted ${userId}`);
+                                    }, 1000);
+                                })
+                                .catch(e => console.error(`[addRemoteVideo] Even muted play failed:`, e));
+                        }
+                    });
+            };
+        } else {
+            console.log(`[addRemoteVideo] srcObject already set for ${userId}, skipping`);
+        }
     }
-    
 
-    async function handleOffer(msg, iceServers) {
+    async function handleOffer(userId, msg, iceServers) {
+        console.log(`[${userId}] Handling offer message`, msg);
         const remoteId = msg.from ?? msg.user_id ?? msg.sender;
-        if (!remoteId) { console.warn('Offer missing remote id'); return; }
-
+        const userName = msg.user_name || `User ${remoteId}`;
+        if (!remoteId) { 
+            console.warn('Offer missing remote id'); 
+            return; 
+        }
+        
+        console.log(`[${userId}] Received offer from [${remoteId}]`);
+        
+        // Clean up existing connection
         if (peerConnections[remoteId]) {
+            console.log(`[${userId}] Closing existing connection to [${remoteId}]`);
             try { peerConnections[remoteId].close(); } catch (e) { }
             delete peerConnections[remoteId];
             removeRemoteVideo(remoteId);
         }
-
-        const pc = new RTCPeerConnection({ iceServers: iceServers });
-        peerConnections[remoteId] = pc;
-
-        // Initialize transceivers
-        pc.addTransceiver('audio', { direction: 'sendrecv' });
-        pc.addTransceiver('video', { direction: 'sendrecv' });
-
-        if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
-            const videoTrack = localStream.getVideoTracks()[0];
-
-            const transceivers = pc.getTransceivers();
-            if (audioTrack && transceivers[0]) {
-                transceivers[0].sender.replaceTrack(audioTrack);
-            }
-            if (videoTrack && transceivers[1]) {
-                transceivers[1].sender.replaceTrack(videoTrack);
-            }
-        }
-
-        pc.ontrack = (ev) => {
-            const stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
-            if (stream) addRemoteVideo(remoteId, `User ${remoteId}`, stream);
-        };
-
-        pc.onicecandidate = (ev) => {
-            if (ev.candidate) {
-                sendMessage({
-                    type: 'ice_candidate',
-                    target_user_id: remoteId,
-                    candidate: ev.candidate.candidate,
-                    sdp_mid: ev.candidate.sdpMid,
-                    sdp_m_line_index: ev.candidate.sdpMLineIndex
-                });
-            }
-        };
-
-        // Monitor connection state
-        pc.oniceconnectionstatechange = () => {
-            console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
-        };
-
-        pc.onconnectionstatechange = () => {
-            console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
-        };
-
+        
+        // Create connection (not initiator, since we're answering)
+        const pc = startConnection(userId, remoteId, userName, false, iceServers);
+        
         try {
             await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
             const ans = await pc.createAnswer();
             await pc.setLocalDescription(ans);
-            sendMessage({ type: 'answer', target_user_id: remoteId, sdp: ans.sdp });
+            
+            sendMessage({ 
+                type: 'answer', 
+                target_user_id: remoteId, 
+                sdp: ans.sdp 
+            });
+            
+            console.log(`[${userId}] Answer sent to [${remoteId}]`);
         } catch (err) {
-            console.error('handleOffer error', err);
+            console.error(`[${userId}] handleOffer error:`, err);
         }
     }
 
@@ -391,15 +408,6 @@
         connect(parseInt('{{ user_id }}'));
     });
 
-    // Demo: Simulate adding remote users
-    setTimeout(() => {
-        //addRemoteVideo('user1', 'User 1');
-        // addRemoteVideo('user2', 'User 2');
-        // addRemoteVideo('user3', 'User 3');
-        // addRemoteVideo('user4', 'User 4');
-        
-    }, 1000);
-
     const sendUserMessageBtn = document.getElementById('sendUserMessage');
     sendUserMessageBtn.addEventListener('click', sendUserMessage);
     const messageInputField = document.getElementById('userMessageInput');
@@ -440,9 +448,10 @@
             
             const videoElement = document.getElementById('localVideo');
             videoElement.srcObject = localStream;
+            videoElement.muted = true;
             videoElement.style.transform = 'scaleX(-1)';
             
-            const serverUrl = `http://localhost:8085/call/ws/rooms`;
+            const serverUrl = `https://himalpoudel.name.np/vibecall/call/ws/rooms`;
             ws = new WebSocket(`${serverUrl}/${roomId}`);
             
             ws.onopen = () => {
@@ -472,17 +481,26 @@
         switch (msg.type) {
             case 'user-joined':
                 updateUsersList(msg.users);
-
-                (msg.users || []).forEach(([remoteId, username]) => {
-                    if (remoteId === userId) return;
-                    if (!peerConnections[remoteId]) {
-                        startConnection(remoteId, username, true, iceServers);
-                    }
-                });
+                
+                const isMyJoin = msg.user_id === userId;
+                
+                if (isMyJoin) {
+                    (msg.users || []).forEach(([remoteId, username]) => {
+                        if (remoteId === userId) return;
+                        if (!peerConnections[remoteId]) {
+                            console.log(`[${userId}] I joined - INITIATING to existing user [${remoteId}]`);
+                            startConnection(userId, remoteId, username, true, iceServers);
+                        }
+                    });
+                } else {
+                    // Someone else joined - they will initiate to me, I do nothing
+                    console.log(`[${userId}] User [${msg.user_id}] joined - waiting for their offer`);
+                    // Don't create connection - wait for offer from the new joiner
+                }
                 break;
 
             case 'offer':
-                await handleOffer(msg, iceServers);
+                await handleOffer(userId, msg, iceServers);
                 break;
 
             case 'answer':
@@ -540,32 +558,41 @@
     }
 
 
-    function startConnection(remoteId, label = '', isInitiator = false, iceServers) {
+    function startConnection(userId, remoteId, label = '', isInitiator = false, iceServers) {
+        console.log(`[${userId}] Creating ${isInitiator ? 'INITIATOR' : 'RECEIVER'} connection to [${remoteId}]`);
+    
         const pc = new RTCPeerConnection({ iceServers: iceServers });
         peerConnections[remoteId] = pc;
-
-        // Initialize transceivers to maintain m-line order
-        pc.addTransceiver('audio', { direction: 'sendrecv' });
-        pc.addTransceiver('video', { direction: 'sendrecv' });
-
+    
+        // Add local tracks
         if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
-            const videoTrack = localStream.getVideoTracks()[0];
-
-            const transceivers = pc.getTransceivers();
-            if (audioTrack && transceivers[0]) {
-                transceivers[0].sender.replaceTrack(audioTrack);
-            }
-            if (videoTrack && transceivers[1]) {
-                transceivers[1].sender.replaceTrack(videoTrack);
-            }
+            localStream.getTracks().forEach(track => {
+                console.log(`[${userId}] Adding ${track.kind} track to [${remoteId}]:`, track.readyState);
+                pc.addTrack(track, localStream);
+            });
+        } else {
+            console.warn(`[${userId}] No localStream when creating connection to [${remoteId}]`);
         }
-
+        
         pc.ontrack = (ev) => {
-            const stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
-            if (stream) addRemoteVideo(remoteId, label || `User ${remoteId}`, stream);
-        };
-
+            console.log(`[${userId}] 🎥 ontrack from [${remoteId}]:`, ev.track.kind, ev.track.readyState);
+            
+            if (ev.streams && ev.streams[0]) {
+                const stream = ev.streams[0];
+                
+                // Store or update the stream reference
+                if (!remoteStreams[remoteId]) {
+                    // First track received - create video element
+                    console.log(`[${userId}] First track from [${remoteId}], creating video element`);
+                    remoteStreams[remoteId] = stream;
+                    addRemoteVideo(remoteId, label || `User ${remoteId}`, stream);
+                } else {
+                    // Subsequent tracks - stream is already set, do nothing
+                    console.log(`[${userId}] Additional track from [${remoteId}], video already exists`);
+                    // The stream object already has both tracks, no need to update
+                }
+            }
+        };        
         pc.onicecandidate = (ev) => {
             if (ev.candidate) {
                 sendMessage({
@@ -577,13 +604,12 @@
                 });
             }
         };
-
-        let ieNegotiating = false;
+        
+        let isNegotiating = false;
         pc.onnegotiationneeded = async () => {
             if (!isInitiator || pc.signalingState !== 'stable' || isNegotiating) {
                 return;
             }
-
             try {
                 isNegotiating = true;
                 await pc.setLocalDescription();
@@ -598,28 +624,15 @@
                 isNegotiating = false;
             }
         };
-
-        // Monitor connection state to detect disconnections
+        
         pc.oniceconnectionstatechange = () => {
             console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
-            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                console.warn(`Connection to ${remoteId} ${pc.iceConnectionState}. Attempting ICE restart...`);
-                // Optionally trigger ICE restart
-                setTimeout(() => {
-                    if (pc.iceConnectionState === 'disconnected' && isInitiator) {
-                        restartIce(remoteId);
-                    }
-                }, 3000);
-            }
         };
-
+        
         pc.onconnectionstatechange = () => {
             console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
-            if (pc.connectionState === 'failed') {
-                console.error(`Connection to ${remoteId} failed completely.`);
-            }
         };
-
+        
         if (isInitiator) {
             setTimeout(() => {
                 if (pc.signalingState === 'stable') {
@@ -627,7 +640,7 @@
                 }
             }, 0);
         }
-
+        
         return pc;
     }
 
@@ -659,7 +672,7 @@
 
     function leave() {
         if (ws && ws.readyState === WebSocket.OPEN) {
-            sendMessage({ type: 'leave', room_id: roomId });
+            sendMessage({ type: 'leave', room_id: '{{ room_id }}' });
             ws.close();
         }
         cleanup();
@@ -674,9 +687,7 @@
         if (localStream) localStream.getTracks().forEach(t => { try { t.stop(); } catch (e) { } });
         localStream = null;
 
-        videosGrid.innerHTML = '';
         updateUsersList([]);
-        videoContainer.classList.remove('active');
         controlsRow.style.display = 'none';
         joinContainer.style.display = 'block';
         connectBtn.disabled = false;

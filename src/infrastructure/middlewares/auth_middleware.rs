@@ -14,6 +14,7 @@ pub async fn auth(
 ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
     let session = req.get_session();
     let path = req.path().to_string();
+    println!("Auth middleware triggered for path: {}", path);
 
     let (http_req, payload) = req.parts_mut();
 
@@ -30,7 +31,7 @@ pub async fn auth(
     session.insert("redirect_after_login", &path).ok();
 
     let response = HttpResponse::Found()
-        .append_header((LOCATION, "/auth/login"))
+        .append_header((LOCATION, "/vibecall/auth/login"))
         .finish()
         .map_into_boxed_body();
 

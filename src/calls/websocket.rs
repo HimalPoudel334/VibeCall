@@ -197,7 +197,12 @@ async fn handle_text_message(
             target_user_id,
             sdp,
         } => {
-            let message = ServerMessage::Offer { from: user_id, sdp };
+            let user = server.get_caller_info(user_id).await?;
+            let message = ServerMessage::Offer {
+                from: user_id,
+                user_name: user.1,
+                sdp,
+            };
             let json = serde_json::to_string(&message)?;
             server.send_to_user(target_user_id, &json)?;
             println!("[{}] Sent offer to [{}]", user_id, target_user_id);

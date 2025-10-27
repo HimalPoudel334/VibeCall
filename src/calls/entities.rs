@@ -108,7 +108,11 @@ pub enum ServerMessage {
     UserLeft { user_id: i32, user_name: String },
 
     #[serde(rename = "offer")]
-    Offer { from: i32, sdp: String },
+    Offer {
+        from: i32,
+        user_name: String,
+        sdp: String,
+    },
 
     #[serde(rename = "answer")]
     Answer { from: i32, sdp: String },
