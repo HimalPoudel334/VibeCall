@@ -55,6 +55,7 @@ pub async fn index(
 pub async fn get_turn_credentials(
     identity: Identity,
     room_id: web::Query<RoomIdQueryParam>,
+    user_service: web::Data<Arc<dyn UserService>>,
 ) -> actix_web::Result<HttpResponse> {
     let user_id: i32 = identity
         .id()?
@@ -85,9 +86,16 @@ pub async fn get_turn_credentials(
         }
     ]);
 
+    let user_name = user_service
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))
+        .map(|user| format!("{} {}", user.first_name, user.last_name))?;
+
     let mut context = Context::new();
     context.insert("title", "Home Page");
     context.insert("user_id", &user_id);
+    context.insert("user_name", &user_name);
     context.insert("room_id", &room_id.room_id);
     context.insert("ice_servers", &ice_servers.to_string());
 

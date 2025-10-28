@@ -71,7 +71,7 @@ pub struct CallParticipant {
     pub duration: Option<i32>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum SignalingMessage {
     #[serde(rename = "join")]
@@ -92,6 +92,14 @@ pub enum SignalingMessage {
         candidate: String,
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
+    },
+
+    #[serde(rename = "chat_message")]
+    ChatMessage {
+        user_id: i32,
+        user_name: String,
+        message: String,
+        timestamp: u64,
     },
 }
 

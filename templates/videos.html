@@ -482,7 +482,9 @@
         try {
             const iceServers = {{ ice_servers | safe }};
             const roomId = '{{ room_id }}';
+            const userName = '{{ user_name }}' || 'You';
             const localVideo = document.getElementById('localVideo');
+
     
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: cameraFacingMode } });
     
@@ -506,6 +508,9 @@
     
             ws.onclose = () => cleanup();
             ws.onerror = e => console.error('WS error', e);
+
+
+            initializeChat();
         } catch (e) {
             console.error('connect error', e);
             alert('Media / WS error: ' + e.message);
@@ -552,6 +557,10 @@
                 }
                 removeRemoteVideo(uid);
                 updateUsersList(msg.users);
+                break;
+
+            case 'chat_message':
+                handleChatMessage(userId, msg);
                 break;
     
             case 'error':
@@ -605,16 +614,82 @@
     });
     
     function sendUserMessage() {
+
         const inp = document.getElementById('userMessageInput');
         const txt = inp.value.trim();
         if (!txt) return;
-        const area = document.getElementById('messageContent');
-        area.innerHTML += `<div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                              <span>You: ${txt}</span>
-                              <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-                           </div>`;
+
+        addChatMessage('{{ user_name }}', txt, true);
+
+        sendMessage({
+            type: 'chat_message',
+            user_id: parseInt('{{ user_id }}'),
+            user_name: '{{ user_name }}' || 'You',
+            message: txt,
+            timestamp: Date.now()
+        });
+
         inp.value = '';
+
+    }
+
+    function handleChatMessage(userId, msg) {
+        const senderName = msg.user_name || `User ${msg.user_id}`;
+        const messageText = msg.message;
+        
+        // Don't display own messages again (already displayed when sent)
+        if (msg.user_id === userId) return;
+        
+        addChatMessage(senderName, messageText, false);
+        
+        // Optional: Show notification if chat panel is hidden
+        const chatPanel = document.getElementById('userMessagePanel');
+        if (chatPanel && chatPanel.classList.contains('hidden')) {
+            showChatNotification();
+        }
+    }
+
+    function addChatMessage(userName, messageText, isSelf = false) {
+        const area = document.getElementById('messageContent');
+        
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `flex ${isSelf ? 'justify-end' : 'justify-start'} mb-2`;
+        
+        const bubble = document.createElement('div');
+        bubble.className = `max-w-[80%] rounded-lg px-3 py-2 ${
+            isSelf 
+                ? 'bg-teal-600 text-white' 
+                : 'bg-gray-700 text-white'
+        }`;
+        
+        const nameSpan = document.createElement('div');
+        nameSpan.className = `text-xs ${isSelf ? 'text-teal-100' : 'text-gray-400'} mb-1 font-semibold`;
+        nameSpan.textContent = userName;
+        
+        const textSpan = document.createElement('div');
+        textSpan.className = 'text-sm break-words';
+        textSpan.textContent = messageText;
+        
+        bubble.appendChild(nameSpan);
+        bubble.appendChild(textSpan);
+        msgDiv.appendChild(bubble);
+        area.appendChild(msgDiv);
+        
+        // Auto scroll to bottom
         area.scrollTop = area.scrollHeight;
+    }
+
+    function showChatNotification() {
+        const chatBtn = document.getElementById('userMessageBtn');
+        if (!chatBtn) return;
+        
+        // Add a notification badge or pulse effect
+        chatBtn.classList.add('animate-pulse');
+        
+        // Remove pulse after 3 seconds
+        setTimeout(() => {
+            chatBtn.classList.remove('animate-pulse');
+        }, 3000);
     }
     
     document.getElementById('toggleMicBtn').addEventListener('click', function () {
@@ -632,20 +707,54 @@
         }
     });
     
-    document.getElementById('usersListToggle').addEventListener('click', function () {
+    document.getElementById('usersListToggle')?.addEventListener('click', function () {
         const msg = document.getElementById('userMessagePanel');
         const usr = document.getElementById('usersListPanel');
-        if (!msg.classList.contains('hidden')) msg.classList.add('hidden');
-        usr.classList.toggle('hidden');
-        this.classList.toggle('bg-teal-600');
+        
+        if (msg && !msg.classList.contains('hidden')) {
+            msg.classList.add('hidden');
+        }
+        
+        if (usr) {
+            usr.classList.toggle('hidden');
+            this.classList.toggle('bg-teal-600');
+        }
     });
     
-    document.getElementById('userMessageBtn').addEventListener('click', function () {
+    document.getElementById('userMessageBtn')?.addEventListener('click', function () {
         const usr = document.getElementById('usersListPanel');
         const msg = document.getElementById('userMessagePanel');
-        if (!usr.classList.contains('hidden')) usr.classList.add('hidden');
-        msg.classList.toggle('hidden');
+        
+        if (usr && !usr.classList.contains('hidden')) {
+            usr.classList.add('hidden');
+            document.getElementById('usersListToggle')?.classList.remove('bg-teal-600');
+        }
+        
+        if (msg) {
+            const wasHidden = msg.classList.contains('hidden');
+            msg.classList.toggle('hidden');
+            
+            // Focus input when opening
+            if (wasHidden) {
+                const input = document.getElementById('userMessageInput');
+                if (input) {
+                    setTimeout(() => input.focus(), 100);
+                }
+            }
+            
+            // Remove notification effect
+            this.classList.remove('animate-pulse');
+        }
     });
 
+    function initializeChat() {
+        
+        // Clear any existing messages
+        const messageContent = document.getElementById('messageContent');
+        if (messageContent) {
+            messageContent.innerHTML = '';
+        }
+        
+    }
 </script>
 {% endblock %}

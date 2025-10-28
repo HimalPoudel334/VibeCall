@@ -233,6 +233,11 @@ async fn handle_text_message(
             let json = serde_json::to_string(&message)?;
             server.send_to_user(target_user_id, &json)?;
         }
+
+        SignalingMessage::ChatMessage { .. } => {
+            let json = serde_json::to_string(&message)?;
+            server.broadcast_to_room(_room_id, user_id, &json);
+        }
     }
 
     Ok(())
