@@ -87,513 +87,316 @@
     </div>
 </div>
 
-<script>
+<script type="text/javascript">
     let ws = null;
     let peerConnections = {};
     let localStream = null;
-    const remoteStreams = {}; // Track streams by user ID
-
-    // VIDEO TOGGLE
+    const remoteStreams = {};
+    let cameraFacingMode = 'user';
+    
     const toggleVideoBtn = document.getElementById('toggleVideoBtn');
-    // VIDEO TOGGLE
-    toggleVideoBtn.addEventListener('click', async function () {
-        const videoBtn = this;
-        const videoIcon = document.getElementById('videoIcon');
-        const localVideoContainer = document.getElementById('localVideoContainer');
-        const localVideoElement = document.getElementById('localVideo');
-        
+    toggleVideoBtn.addEventListener('click', async () => {
+        const videoBtn   = toggleVideoBtn;
+        const videoIcon  = document.getElementById('videoIcon');
+        const localCont  = document.getElementById('localVideoContainer');
+        const localVid   = document.getElementById('localVideo');
+    
         if (!localStream) return;
-        
+    
         const videoTracks = localStream.getVideoTracks();
-        const isVideoEnabled = videoTracks.length > 0 && videoTracks[0].readyState === 'live';
-        
-        if (isVideoEnabled) {
-            // ===== TURN VIDEO OFF =====
-            videoTracks.forEach(track => {
-                track.stop();
-                localStream.removeTrack(track);
+        const videoOn = videoTracks.length > 0 && videoTracks[0].readyState === 'live';
+    
+        if (videoOn) {                                   // ---- TURN OFF ----
+            // Stop and remove video tracks
+            videoTracks.forEach(t => { 
+                t.stop(); 
+                localStream.removeTrack(t); 
             });
-            
-            // Update peer connections - remove video track
-            if (typeof peerConnections !== 'undefined') {
-                Object.values(peerConnections).forEach(pc => {
-                    const senders = pc.getSenders();
-                    senders.forEach(sender => {
-                        if (sender.track && sender.track.kind === 'video') {
-                            pc.removeTrack(sender);
-                        }
-                    });
-                });
+    
+            // Replace video sender with null (keeps the slot but removes track)
+            for (const [remoteId, pc] of Object.entries(peerConnections)) {
+                const senders = pc.getSenders();
+                const videoSender = senders.find(s => s.track?.kind === 'video');
+                
+                if (videoSender) {
+                    await videoSender.replaceTrack(null);
+                }
             }
-            
-            // Properly release video element
-            localVideoElement.pause();
-            localVideoElement.srcObject = null;
-            localVideoElement.load();
-            
+    
+            localVid.srcObject = null;
             videoBtn.classList.add('bg-red-600');
             videoIcon.className = 'fa-solid fa-video-slash text-xs sm:text-sm md:text-lg';
+    
+            // Add local placeholder
+            localCont.querySelector('.placeholder')?.remove();
+            localCont.appendChild(createPlaceholder('You'));
+    
+            console.log('Video OFF');
             
-            // Show placeholder
-            const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
-            if (existingPlaceholder) {
-                existingPlaceholder.remove();
-            }
-            
-            const placeholder = createPlaceholder('Y O U');
-            placeholder.classList.add('placeholder');
-            localVideoContainer.appendChild(placeholder);
-            
-            console.log('Video turned OFF - camera released');
-            
-        } else {
-            // ===== TURN VIDEO ON =====
+        } else {                                          // ---- TURN ON ----
             try {
-                // Request ONLY video, don't request audio
-                const newStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }
-                    // NO audio: true here
+                const cam = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: cameraFacingMode } 
                 });
-                const newVideoTrack = newStream.getVideoTracks()[0];
-                
-                // Add to local stream
-                localStream.addTrack(newVideoTrack);
-                
-                // Add to peer connections if they exist
-                if (typeof peerConnections !== 'undefined') {
-                    Object.values(peerConnections).forEach(pc => {
-                        pc.addTrack(newVideoTrack, localStream);
-                    });
+                const vTrack = cam.getVideoTracks()[0];
+                localStream.addTrack(vTrack);
+    
+                // Replace null sender with new video track
+                for (const [remoteId, pc] of Object.entries(peerConnections)) {
+                    const senders = pc.getSenders();
+                    const videoSender = senders.find(s => s.track === null || s.track?.kind === 'video');
+                    
+                    if (videoSender) {
+                        await videoSender.replaceTrack(vTrack);
+                    } else {
+                        // No sender exists, add new one
+                        pc.addTrack(vTrack, localStream);
+                    }
                 }
-                
+    
+                localVid.srcObject = localStream;
+                if (cameraFacingMode === 'user') {
+                    localVid.style.transform = 'scaleX(-1)';
+                }
+                await localVid.play();
+    
                 videoBtn.classList.remove('bg-red-600');
                 videoIcon.className = 'fa-solid fa-video text-xs sm:text-sm md:text-lg';
-                
-                // Remove placeholder
-                const existingPlaceholder = localVideoContainer.querySelector('.placeholder');
-                if (existingPlaceholder) {
-                    existingPlaceholder.remove();
-                }
-                
-                // Setup video element - reassign the entire stream
-                localVideoElement.srcObject = localStream;
-                localVideoElement.style.transform = 'scaleX(-1)';
-                await localVideoElement.play();
-                
-                console.log('Video turned ON');
-                
-            } catch (err) {
-                console.error('Failed to start camera:', err);
-                alert('Could not access camera: ' + err.message);
+    
+                // Remove local placeholder
+                localCont.querySelector('.placeholder')?.remove();
+    
+                console.log('Video ON');
+            } catch (e) {
+                console.error('Camera failed', e);
+                alert('Camera error: ' + e.message);
             }
         }
     });
     
-    document.getElementById('flipCameraBtn').addEventListener('click', function() {
+    document.getElementById('flipCameraBtn').addEventListener('click', function () {
         this.classList.toggle('bg-teal-600');
     });
-
+    
     document.getElementById('endCallBtn').addEventListener('click', leave);
-
-
-    function createPlaceholder(userName) {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'absolute inset-0 flex items-center justify-center bg-gray-700';
-        
-        const initials = getUserInitials(userName);
-        placeholder.innerHTML = `
-            <div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
-                ${initials}
-            </div>
-        `;
-        return placeholder;
+    
+    function createPlaceholder(name) {
+        const div = document.createElement('div');
+        div.className = 'placeholder absolute inset-0 flex items-center justify-center bg-gray-700';
+        div.innerHTML = `<div class="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                ${getUserInitials(name)}
+                         </div>`;
+        return div;
     }
+    
+    function getUserInitials(name) {
+        if (!name || typeof name !== 'string') return '?';
+        
+        const trimmed = name.trim();
+        if (!trimmed) return '?';
 
+        if(trimmed == 'You') return 'You';
+        
+        const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+        
+        if (words.length === 0) return '?';
+        if (words.length === 1) return words[0][0].toUpperCase();
+        
+        return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    
     function addRemoteVideo(userId, userName, stream) {
-        console.log(`[addRemoteVideo] Called for user ${userId}`, {
-            streamId: stream?.id,
-            tracks: stream?.getTracks().map(t => `${t.kind}:${t.readyState}`)
+        const vidId = `video-${userId}`;
+        let videoEl = document.getElementById(vidId);
+    
+        if (!videoEl) {
+            const remoteArea = document.getElementById('remoteVideos');
+            const cont = document.createElement('div');
+            cont.id = `remote-video-${userId}`;
+            cont.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500/50 w-full h-full';
+            cont.dataset.userName = userName;
+    
+            videoEl = document.createElement('video');
+            videoEl.id = vidId;
+            videoEl.className = 'w-full h-full object-cover bg-gray-700';
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
+    
+            const nameEl = document.createElement('div');
+            nameEl.className = 'absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm';
+            nameEl.textContent = userName;
+    
+            cont.append(videoEl, nameEl);
+            remoteArea.appendChild(cont);
+            updateVideoLayout(remoteArea.children.length);
+        }
+    
+        if (videoEl.srcObject !== stream) {
+            videoEl.srcObject = stream;
+            videoEl.onloadedmetadata = () => videoEl.play().catch(e => {
+                console.log('Auto-play prevented:', e);
+            });
+        }
+    
+        // Monitor the video element directly for video track activity
+        const checkVideo = () => {
+            setTimeout(() => updateRemotePlaceholder(userId, videoEl), 100);
+        };
+    
+        videoEl.onplaying = checkVideo;
+        videoEl.onpause = checkVideo;
+        videoEl.onloadeddata = checkVideo;
+    
+        // Also monitor stream track changes
+        stream.addEventListener('addtrack', e => {
+            console.log('Track added:', e.track.kind, 'from user', userId);
+            if (e.track.kind === 'video') {
+                e.track.onmute = checkVideo;
+                e.track.onunmute = checkVideo;
+                e.track.onended = checkVideo;
+                checkVideo();
+            }
         });
         
-        const vidId = `video-${userId}`;
-        let videoElement = document.getElementById(vidId);
+        stream.addEventListener('removetrack', e => {
+            console.log('Track removed:', e.track.kind, 'from user', userId);
+            if (e.track.kind === 'video') {
+                checkVideo();
+            }
+        });
+    
+        // Monitor existing tracks
+        stream.getVideoTracks().forEach(track => {
+            track.onmute = checkVideo;
+            track.onunmute = checkVideo;
+            track.onended = checkVideo;
+        });
+    
+        // Initial check
+        checkVideo();
+    }
+    
+    function updateRemotePlaceholder(userId, videoElement) {
+        const cont = document.getElementById(`remote-video-${userId}`);
+        if (!cont) return;
+    
+        const stream = videoElement.srcObject;
+        if (!stream) return;
+    
+        const videoTracks = stream.getVideoTracks();
+        const hasActiveVideo = videoTracks.some(track => {
+            return track.readyState === 'live' && track.enabled && !track.muted;
+        });
         
-        if (!videoElement) {
-            console.log(`[addRemoteVideo] Creating new video element for ${userId}`);
-            const remoteVideos = document.getElementById('remoteVideos');
-            
-            const videoContainer = document.createElement('div');
-            videoContainer.id = `remote-video-${userId}`;
-            videoContainer.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500/50 w-full h-full';
-            
-            videoElement = document.createElement('video');
-            videoElement.id = vidId;
-            videoElement.className = 'w-full h-full object-cover bg-gray-700';
-            videoElement.autoplay = true;
-            videoElement.playsInline = true;
-            videoElement.muted = false;
-            
-            // Username overlay
-            const userNameElement = document.createElement('div');
-            userNameElement.className = 'absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs sm:text-sm';
-            userNameElement.textContent = userName;
-            
-            // Add elements
-            videoContainer.appendChild(videoElement);
-            videoContainer.appendChild(userNameElement);
-            remoteVideos.appendChild(videoContainer);
-            
-            // Update layout
-            updateVideoLayout(remoteVideos.children.length);
-            
-            console.log(`[addRemoteVideo] Video element created for ${userId}`);
-        } else {
-            console.log(`[addRemoteVideo] Video element already exists for ${userId}`);
-        }
-        
-        // Only set srcObject if it's different or not set
-        if (videoElement.srcObject !== stream) {
-            console.log(`[addRemoteVideo] Setting srcObject for ${userId}`);
-            videoElement.srcObject = stream;
-            
-            // Wait for metadata before playing
-            videoElement.onloadedmetadata = () => {
-                console.log(`[addRemoteVideo] ✅ Metadata loaded for ${userId}`, {
-                    width: videoElement.videoWidth,
-                    height: videoElement.videoHeight
-                });
-                
-                videoElement.play()
-                    .then(() => {
-                        console.log(`[addRemoteVideo] ✅ play() succeeded for ${userId}`);
-                    })
-                    .catch(err => {
-                        console.error(`[addRemoteVideo] ❌ play() failed for ${userId}:`, err);
-                        
-                        // Fallback: muted autoplay
-                        if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
-                            console.log(`[addRemoteVideo] Trying muted autoplay for ${userId}`);
-                            videoElement.muted = true;
-                            videoElement.play()
-                                .then(() => {
-                                    setTimeout(() => {
-                                        videoElement.muted = false;
-                                        console.log(`[addRemoteVideo] Unmuted ${userId}`);
-                                    }, 1000);
-                                })
-                                .catch(e => console.error(`[addRemoteVideo] Even muted play failed:`, e));
-                        }
-                    });
-            };
-        } else {
-            console.log(`[addRemoteVideo] srcObject already set for ${userId}, skipping`);
+        const ph = cont.querySelector('.placeholder');
+    
+        console.log('Placeholder check for user', userId, '- hasActiveVideo:', hasActiveVideo, 
+                    'tracks:', videoTracks.length,
+                    'track states:', videoTracks.map(t => ({ready: t.readyState, enabled: t.enabled, muted: t.muted})));
+    
+        if (!hasActiveVideo && !ph) {
+            videoElement.style.display = 'none';
+            const placeholder = createPlaceholder(cont.dataset.userName || `User ${userId}`);
+            placeholder.classList.add('placeholder');
+            cont.appendChild(placeholder);
+            console.log('Added placeholder for user', userId);
+
+        } else if (hasActiveVideo && ph) {
+            videoElement.style.display = 'block';
+            ph.remove();
+            console.log('Removed placeholder for user', userId);
+
+        } else if (!hasActiveVideo && ph) {
+            videoElement.style.display = 'none';
+
+        } else if (hasActiveVideo && !ph) {
+            videoElement.style.display = 'block';
         }
     }
-
-    async function handleOffer(userId, msg, iceServers) {
-        console.log(`[${userId}] Handling offer message`, msg);
-        const remoteId = msg.from ?? msg.user_id ?? msg.sender;
-        const userName = msg.user_name || `User ${remoteId}`;
-        if (!remoteId) { 
-            console.warn('Offer missing remote id'); 
-            return; 
+    
+    async function renegotiate(pc, remoteId) {
+        if (pc.signalingState !== 'stable') {
+            console.log('Waiting for stable state before renegotiating...');
+            return;
         }
-        
-        console.log(`[${userId}] Received offer from [${remoteId}]`);
-        
-        // Clean up existing connection
-        if (peerConnections[remoteId]) {
-            console.log(`[${userId}] Closing existing connection to [${remoteId}]`);
-            try { peerConnections[remoteId].close(); } catch (e) { }
-            delete peerConnections[remoteId];
-            removeRemoteVideo(remoteId);
-        }
-        
-        // Create connection (not initiator, since we're answering)
-        const pc = startConnection(userId, remoteId, userName, false, iceServers);
-        
+    
         try {
-            await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
-            const ans = await pc.createAnswer();
-            await pc.setLocalDescription(ans);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
             
-            sendMessage({ 
-                type: 'answer', 
-                target_user_id: remoteId, 
-                sdp: ans.sdp 
+            sendMessage({
+                type: 'offer',
+                target_user_id: parseInt(remoteId),
+                sdp: pc.localDescription.sdp
             });
             
-            console.log(`[${userId}] Answer sent to [${remoteId}]`);
-        } catch (err) {
-            console.error(`[${userId}] handleOffer error:`, err);
-        }
-    }
-
-    function getUserInitials(userName) {
-        const names = userName.split(' ');
-        if (names.length === 1) {
-            return names[0].charAt(0).toUpperCase();
-        }
-        return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
-    }
-    
-    function updateVideoLayout(videoCount) {
-        const remoteVideos = document.getElementById('remoteVideos');
-        const localVideoContainer = document.getElementById('localVideoContainer');
-        const isMobile = window.innerWidth < 640; // Mobile breakpoint (Tailwind 'sm')
-        
-        // Completely reset all grid-related classes and styles
-        remoteVideos.className = 'w-full h-full grid gap-0.5 sm:gap-1 p-0.5 sm:p-1 overflow-auto';
-        remoteVideos.style.gridAutoRows = '';
-        
-        // Count actual remote videos (excluding local video if it's in the grid)
-        const actualRemoteCount = remoteVideos.contains(localVideoContainer) ? videoCount - 1 : videoCount;
-        
-        // Handle local video placement (only on mobile if >2 remote users)
-        if (actualRemoteCount > 2 && isMobile) {
-            // Move local video into grid
-            if (!remoteVideos.contains(localVideoContainer)) {
-                localVideoContainer.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg w-full h-full';
-                localVideoContainer.style.maxHeight = '';
-                localVideoContainer.style.maxWidth = '';
-                remoteVideos.appendChild(localVideoContainer);
-            }
-            // Set equal row heights for mobile grid
-            remoteVideos.style.gridAutoRows = '1fr';
-        } else {
-            // Return local video to absolute position
-            if (remoteVideos.contains(localVideoContainer)) {
-                remoteVideos.removeChild(localVideoContainer);
-                localVideoContainer.className = 'absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg z-10';
-                localVideoContainer.style.maxHeight = '200px';
-                localVideoContainer.style.maxWidth = '300px';
-                document.querySelector('.flex-1').appendChild(localVideoContainer);
-            }
-        }
-
-        // Adjust grid columns based on actual remote video count
-        if (actualRemoteCount === 0) {
-            remoteVideos.classList.add('grid-cols-1');
-        } else if (actualRemoteCount === 1) {
-            remoteVideos.classList.add('grid-cols-1');
-        } else if (actualRemoteCount === 2) {
-            remoteVideos.classList.add('grid-cols-1', 'sm:grid-cols-2');
-        } else if (actualRemoteCount <= 4) {
-            remoteVideos.classList.add('grid-cols-2', 'sm:grid-cols-2');
-        } else {
-            remoteVideos.classList.add('grid-cols-2', 'sm:grid-cols-2', 'lg:grid-cols-3');
+            console.log('Offer sent to', remoteId);
+        } catch (e) { 
+            console.error('Renegotiate error for peer', remoteId, e); 
         }
     }
     
-    function removeRemoteVideo(userId) {
-        const videoElement = document.getElementById(`remote-video-${userId}`);
-        if (videoElement) {
-            videoElement.remove();
-            const remoteVideos = document.getElementById('remoteVideos');
-            updateVideoLayout(remoteVideos.children.length);
+    async function applyAnswer(remoteId, sdp) {
+        const pc = peerConnections[remoteId];
+        if (pc && pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription({ type: 'answer', sdp });
         }
     }
-
-    // Add resize event listener to update layout on window resize
-    window.addEventListener('resize', () => {
-        const remoteVideos = document.getElementById('remoteVideos');
-        updateVideoLayout(remoteVideos.children.length);
-    });
-
-    // Initial layout update on load
-    window.addEventListener('load', () => {
-        const remoteVideos = document.getElementById('remoteVideos');
-        updateVideoLayout(remoteVideos.children.length);
-
-        connect(parseInt('{{ user_id }}'));
-    });
-
-    const sendUserMessageBtn = document.getElementById('sendUserMessage');
-    sendUserMessageBtn.addEventListener('click', sendUserMessage);
-    const messageInputField = document.getElementById('userMessageInput');
-    messageInputField.addEventListener('keypress', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            sendUserMessage();
-        }
-    });
-
-    function sendUserMessage(){
-        const messageInput = document.getElementById('userMessageInput');
-        const message = messageInput.value.trim();
-        if (message) {
-            const messageContent = document.getElementById('messageContent');
-            const messageElement = document.createElement('div');
-            messageElement.className = 'flex items-center justify-between p-2 bg-gray-800 rounded';
-            messageElement.innerHTML = `
-                <span>You: ${message}</span>
-                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-            `;
-            messageContent.appendChild(messageElement);
-            messageInput.value = '';
-            messageContent.scrollTop = messageContent.scrollHeight;
-        }
-    };
-
-    async function connect(userId) {
-        try {
-            const iceServers = {{ ice_servers | safe }};
-            const roomId = '{{ room_id }}';
-            
-            // ONLY get audio initially - NO VIDEO
-            localStream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                    video: { facingMode: "user" }
-            });
-            
-            const videoElement = document.getElementById('localVideo');
-            videoElement.srcObject = localStream;
-            videoElement.muted = true;
-            videoElement.style.transform = 'scaleX(-1)';
-            
-            const serverUrl = `https://himalpoudel.name.np/vibecall/call/ws/rooms`;
-            ws = new WebSocket(`${serverUrl}/${roomId}`);
-            
-            ws.onopen = () => {
-                sendMessage({ type: 'join', room_id: roomId, user_id: userId });
-            };
-            
-            ws.onmessage = async (evt) => {
-                try {
-                    const msg = JSON.parse(evt.data);
-                    await handleSignalingMessage(userId, msg, iceServers);
-                } catch (err) {
-                    console.error('Invalid message', err);
-                }
-            };
-            
-            ws.onerror = (e) => console.error('WebSocket error', e);
-            ws.onclose = () => {
-                cleanup();
-            };
-        } catch (err) {
-            console.error('Failed to get media / TURN', err);
-            alert('Could not access camera/microphone or TURN failed: ' + err);
-        }
-    }
-
-    async function handleSignalingMessage(userId, msg, iceServers) {
-        switch (msg.type) {
-            case 'user-joined':
-                updateUsersList(msg.users);
-                
-                const isMyJoin = msg.user_id === userId;
-                
-                if (isMyJoin) {
-                    (msg.users || []).forEach(([remoteId, username]) => {
-                        if (remoteId === userId) return;
-                        if (!peerConnections[remoteId]) {
-                            console.log(`[${userId}] I joined - INITIATING to existing user [${remoteId}]`);
-                            startConnection(userId, remoteId, username, true, iceServers);
-                        }
-                    });
-                } else {
-                    // Someone else joined - they will initiate to me, I do nothing
-                    console.log(`[${userId}] User [${msg.user_id}] joined - waiting for their offer`);
-                    // Don't create connection - wait for offer from the new joiner
-                }
-                break;
-
-            case 'offer':
-                await handleOffer(userId, msg, iceServers);
-                break;
-
-            case 'answer':
-                {
-                    const remoteId = msg.from ?? msg.user_id ?? msg.sender;
-                    const pc = peerConnections[remoteId];
-                    if (pc) {
-                        if (pc.signalingState !== 'stable') {
-                            await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
-                        } else {
-                            console.warn(`Answer received for peer ${remoteId} but signaling state is stable. Ignoring.`);
-                        }
-                    } else {
-                        console.warn('Answer for unknown peer', remoteId);
-                    }
-                }
-                break;
-
-            case 'ice-candidate':
-                {
-                    const remoteId = msg.from ?? msg.user_id ?? msg.sender;
-                    const pc = peerConnections[remoteId];
-                    if (pc && msg.candidate) {
-                        try {
-                            await pc.addIceCandidate({
-                                candidate: msg.candidate,
-                                sdpMid: msg.sdp_mid,
-                                sdpMLineIndex: msg.sdp_m_line_index
-                            });
-                        } catch (err) {
-                            console.warn('addIceCandidate failed', err);
-                        }
-                    }
-                }
-                break;
-
-            case 'user-left':
-                const uid = msg.user_id;
-                if (peerConnections[uid]) {
-                    try { peerConnections[uid].close(); } catch (e) { }
-                    delete peerConnections[uid];
-                }
-                removeRemoteVideo(uid);
-                updateUsersList(msg.users);
-                break;
-
-            case 'error':
-                console.error('Server error:', msg.message);
-                alert('Server error: ' + msg.message);
-                break;
-
-            default:
-                console.log('Unknown msg type', msg.type);
-        }
-    }
-
-
-    function startConnection(userId, remoteId, label = '', isInitiator = false, iceServers) {
-        console.log(`[${userId}] Creating ${isInitiator ? 'INITIATOR' : 'RECEIVER'} connection to [${remoteId}]`);
     
-        const pc = new RTCPeerConnection({ iceServers: iceServers });
+    function startConnection(userId, remoteId, label, isInitiator, iceServers) {
+        const pc = new RTCPeerConnection({ iceServers });
+        pc.remoteId = remoteId;
         peerConnections[remoteId] = pc;
     
-        // Add local tracks
+        // Add current tracks (audio always, video if present)
         if (localStream) {
             localStream.getTracks().forEach(track => {
-                console.log(`[${userId}] Adding ${track.kind} track to [${remoteId}]:`, track.readyState);
+                console.log('Adding local track:', track.kind, 'to peer', remoteId);
                 pc.addTrack(track, localStream);
             });
-        } else {
-            console.warn(`[${userId}] No localStream when creating connection to [${remoteId}]`);
         }
-        
-        pc.ontrack = (ev) => {
-            console.log(`[${userId}] 🎥 ontrack from [${remoteId}]:`, ev.track.kind, ev.track.readyState);
+    
+        pc.ontrack = ev => {
+            console.log('Received track:', ev.track.kind, 'from', remoteId, 'readyState:', ev.track.readyState);
             
             if (ev.streams && ev.streams[0]) {
                 const stream = ev.streams[0];
                 
-                // Store or update the stream reference
                 if (!remoteStreams[remoteId]) {
-                    // First track received - create video element
-                    console.log(`[${userId}] First track from [${remoteId}], creating video element`);
                     remoteStreams[remoteId] = stream;
                     addRemoteVideo(remoteId, label || `User ${remoteId}`, stream);
                 } else {
-                    // Subsequent tracks - stream is already set, do nothing
-                    console.log(`[${userId}] Additional track from [${remoteId}], video already exists`);
-                    // The stream object already has both tracks, no need to update
+                    // Stream already exists, update monitoring
+                    const videoEl = document.getElementById(`video-${remoteId}`);
+                    if (videoEl) {
+                        // Track state changed, check placeholder
+                        const checkVideo = () => {
+                            setTimeout(() => updateRemotePlaceholder(remoteId, videoEl), 50);
+                        };
+                        
+                        checkVideo();
+                        
+                        // Add listeners to new track
+                        if (ev.track.kind === 'video') {
+                            ev.track.onmute = () => {
+                                console.log('New video track muted from', remoteId);
+                                checkVideo();
+                            };
+                            ev.track.onunmute = () => {
+                                console.log('New video track unmuted from', remoteId);
+                                checkVideo();
+                            };
+                            ev.track.onended = () => {
+                                console.log('New video track ended from', remoteId);
+                                checkVideo();
+                            };
+                        }
+                    }
                 }
             }
-        };        
-        pc.onicecandidate = (ev) => {
+        };
+    
+        pc.onicecandidate = ev => {
             if (ev.candidate) {
                 sendMessage({
                     type: 'ice_candidate',
@@ -604,72 +407,174 @@
                 });
             }
         };
-        
-        let isNegotiating = false;
-        pc.onnegotiationneeded = async () => {
-            if (!isInitiator || pc.signalingState !== 'stable' || isNegotiating) {
-                return;
-            }
-            try {
-                isNegotiating = true;
-                await pc.setLocalDescription();
-                sendMessage({
-                    type: 'offer',
-                    target_user_id: remoteId,
-                    sdp: pc.localDescription.sdp
-                });
-            } catch (err) {
-                console.error('onnegotiationneeded failed to create offer', err);
-            } finally {
-                isNegotiating = false;
-            }
-        };
-        
-        pc.oniceconnectionstatechange = () => {
-            console.log(`ICE connection state for ${remoteId}: ${pc.iceConnectionState}`);
-        };
-        
-        pc.onconnectionstatechange = () => {
-            console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
-        };
-        
+    
         if (isInitiator) {
             setTimeout(() => {
                 if (pc.signalingState === 'stable') {
-                    pc.dispatchEvent(new Event('negotiationneeded'));
+                    renegotiate(pc, remoteId);
                 }
             }, 0);
         }
         
         return pc;
     }
-
-    function sendMessage(msg) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(msg));
+    
+    async function handleOffer(userId, msg, iceServers) {
+        const remoteId = msg.from ?? msg.user_id ?? msg.sender;
+        const userName = msg.user_name || `User ${remoteId}`;
+        if (!remoteId) return;
+    
+        if (peerConnections[remoteId]) {
+            peerConnections[remoteId].close();
+            delete peerConnections[remoteId];
+            removeRemoteVideo(remoteId);
         }
-
+    
+        const pc = startConnection(userId, remoteId, userName, false, iceServers);
+        try {
+            await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            sendMessage({ type: 'answer', target_user_id: remoteId, sdp: ans.sdp });
+        } catch (e) { console.error('handleOffer', e); }
     }
-
-
-    function updateUsersList(users) {
-        const currentUserId = parseInt('{{ user_id }}');
-        let usersContent = document.getElementById('usersContent');
-        if (!users || users.length === 0) {
-            usersContent.textContent = 'None';
+    
+    function updateVideoLayout(cnt) {
+        const remoteArea = document.getElementById('remoteVideos');
+        const localCont = document.getElementById('localVideoContainer');
+        const mobile = window.innerWidth < 640;
+    
+        remoteArea.className = 'w-full h-full grid gap-0.5 sm:gap-1 p-0.5 sm:p-1 overflow-auto';
+        remoteArea.style.gridAutoRows = '';
+    
+        const remoteCnt = remoteArea.contains(localCont) ? cnt - 1 : cnt;
+    
+        if (remoteCnt > 2 && mobile) {
+            if (!remoteArea.contains(localCont)) {
+                localCont.className = 'relative bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg w-full h-full';
+                remoteArea.appendChild(localCont);
+            }
+            remoteArea.style.gridAutoRows = '1fr';
         } else {
-            usersContent.innerHTML = users.map(u => {
-                const [id, name] = u;
-
-            return `
-                <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
-                    <span>👤 ${name} ${id === currentUserId ? '(You)' : ''}</span>
-                    <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
-                </div>`;
-            }).join('');
+            if (remoteArea.contains(localCont)) {
+                remoteArea.removeChild(localCont);
+                localCont.className = 'absolute bottom-4 right-4 w-48 h-36 sm:w-56 sm:h-40 md:w-64 md:h-48 lg:w-72 lg:h-52 bg-gray-800 rounded-lg overflow-hidden border-2 border-teal-500 shadow-lg z-10';
+                document.querySelector('.flex-1').appendChild(localCont);
+            }
+        }
+    
+        const cols = remoteCnt === 0 ? 'grid-cols-1'
+            : remoteCnt === 1 ? 'grid-cols-1'
+            : remoteCnt === 2 ? 'grid-cols-1 sm:grid-cols-2'
+            : remoteCnt <= 4 ? 'grid-cols-2 sm:grid-cols-2'
+                : 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3';
+        remoteArea.className += ' ' + cols;
+    }
+    
+    function removeRemoteVideo(userId) {
+        const el = document.getElementById(`remote-video-${userId}`);
+        if (el) { el.remove(); updateVideoLayout(document.getElementById('remoteVideos').children.length); }
+    }
+    
+    window.addEventListener('resize', () => updateVideoLayout(document.getElementById('remoteVideos').children.length));
+    
+    async function connect(userId) {
+        try {
+            const iceServers = {{ ice_servers | safe }};
+            const roomId = '{{ room_id }}';
+            const localVideo = document.getElementById('localVideo');
+    
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: cameraFacingMode } });
+    
+            localVideo.srcObject = localStream;
+            localVideo.muted = true;
+            if (cameraFacingMode === 'user')
+                localVideo.style.transform = 'scaleX(-1)';
+    
+            ws = new WebSocket(`https://himalpoudel.name.np/vibecall/call/ws/rooms/${roomId}`);
+    
+            ws.onopen = () => {
+                sendMessage({ type: 'join', room_id: roomId, user_id: userId });
+            };
+    
+            ws.onmessage = async e => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    await handleSignalingMessage(userId, msg, iceServers);
+                } catch (_) { }
+            };
+    
+            ws.onclose = () => cleanup();
+            ws.onerror = e => console.error('WS error', e);
+        } catch (e) {
+            console.error('connect error', e);
+            alert('Media / WS error: ' + e.message);
         }
     }
-
+    
+    async function handleSignalingMessage(userId, msg, iceServers) {
+        switch (msg.type) {
+            case 'user-joined':
+                updateUsersList(msg.users);
+                if (msg.user_id === userId) {
+                    (msg.users || []).forEach(([rid, name]) => {
+                        if (rid !== userId && !peerConnections[rid]) {
+                            startConnection(userId, rid, name, true, iceServers);
+                        }
+                    });
+                }
+                break;
+    
+            case 'offer':
+                await handleOffer(userId, msg, iceServers);
+                break;
+    
+            case 'answer':
+                await applyAnswer(msg.from ?? msg.user_id ?? msg.sender, msg.sdp);
+                break;
+    
+            case 'ice-candidate':
+                const pc = peerConnections[msg.from ?? msg.user_id ?? msg.sender];
+                if (pc && msg.candidate) {
+                    await pc.addIceCandidate({
+                        candidate: msg.candidate,
+                        sdpMid: msg.sdp_mid,
+                        sdpMLineIndex: msg.sdp_m_line_index
+                    }).catch(() => { });
+                }
+                break;
+    
+            case 'user-left':
+                const uid = msg.user_id;
+                if (peerConnections[uid]) {
+                    peerConnections[uid].close();
+                    delete peerConnections[uid];
+                }
+                removeRemoteVideo(uid);
+                updateUsersList(msg.users);
+                break;
+    
+            case 'error':
+                alert('Server: ' + msg.message);
+                break;
+        }
+    }
+    
+    function sendMessage(o) {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o));
+    }
+    
+    function updateUsersList(users) {
+        const me = parseInt('{{ user_id }}');
+        const el = document.getElementById('usersContent');
+        if (!users?.length) { el.textContent = 'None'; return; }
+        el.innerHTML = users.map(([id, name]) => `
+            <div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                <span>Person ${name} ${id === me ? '(You)' : ''}</span>
+                <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+            </div>`).join('');
+    }
+    
     function leave() {
         if (ws && ws.readyState === WebSocket.OPEN) {
             sendMessage({ type: 'leave', room_id: '{{ room_id }}' });
@@ -677,67 +582,69 @@
         }
         cleanup();
     }
-
+    
     function cleanup() {
-        Object.values(peerConnections).forEach(pc => {
-            try { pc.close(); } catch (e) { }
-        });
+        Object.values(peerConnections).forEach(pc => pc.close());
         peerConnections = {};
-
-        if (localStream) localStream.getTracks().forEach(t => { try { t.stop(); } catch (e) { } });
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
         localStream = null;
-
         updateUsersList([]);
-        controlsRow.style.display = 'none';
-        joinContainer.style.display = 'block';
-        connectBtn.disabled = false;
-        leaveBtn.disabled = true;
-        toggleMicBtn.disabled = true;
-        toggleVideoBtn.disabled = true;
-        flipCameraBtn.disabled = true;
-        currentFacingMode = 'user';
-
-        updateStatus('Disconnected', false);
+        const c = document.getElementById('controlsRow'); if (c) c.style.display = 'none';
+        const j = document.getElementById('joinContainer'); if (j) j.style.display = 'block';
+        window.location.href = "/vibecall";
     }
-
-
-    // Users list toggle functionality
-    document.getElementById('usersListToggle').addEventListener('click', function() {
-        const messagePanel = document.getElementById('userMessagePanel');
-        const usersPanel = document.getElementById('usersListPanel');
-        if (!messagePanel.classList.contains('hidden')) {
-            messagePanel.classList.add('hidden');
-        }
-        usersPanel.classList.toggle('hidden');
-        this.classList.toggle('bg-teal-600');
+    
+    window.addEventListener('load', () => {
+        updateVideoLayout(0);
+        connect(parseInt('{{ user_id }}'));
     });
-
-    document.getElementById('userMessageBtn').addEventListener('click', function() {
-        const usersPanel = document.getElementById('usersListPanel');
-        const messagePanel = document.getElementById('userMessagePanel');
-        if (!usersPanel.classList.contains('hidden')) {
-            usersPanel.classList.add('hidden');
-        }
-        messagePanel.classList.toggle('hidden');
+    
+    document.getElementById('sendUserMessage').addEventListener('click', sendUserMessage);
+    document.getElementById('userMessageInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') { e.preventDefault(); sendUserMessage(); }
     });
-
-    // Control buttons (unchanged)
-    // MIC TOGGLE
+    
+    function sendUserMessage() {
+        const inp = document.getElementById('userMessageInput');
+        const txt = inp.value.trim();
+        if (!txt) return;
+        const area = document.getElementById('messageContent');
+        area.innerHTML += `<div class="flex items-center justify-between p-2 bg-gray-800 rounded">
+                              <span>You: ${txt}</span>
+                              <div class="w-2 h-2 bg-teal-500 rounded-full"></div>
+                           </div>`;
+        inp.value = '';
+        area.scrollTop = area.scrollHeight;
+    }
+    
     document.getElementById('toggleMicBtn').addEventListener('click', function () {
         if (!localStream) return;
-        const track = localStream.getAudioTracks()[0];
-        if (!track) return;
-    
-        track.enabled = !track.enabled;
-        const micIcon = document.getElementById('micIcon');
-    
-        if (!track.enabled) {
+        const t = localStream.getAudioTracks()[0];
+        if (!t) return;
+        t.enabled = !t.enabled;
+        const ic = document.getElementById('micIcon');
+        if (!t.enabled) {
             this.classList.add('bg-red-600');
-            micIcon.className = 'fa-solid fa-microphone-slash text-xs sm:text-sm md:text-lg';
+            ic.className = 'fa-solid fa-microphone-slash text-xs sm:text-sm md:text-lg';
         } else {
             this.classList.remove('bg-red-600');
-            micIcon.className = 'fa-solid fa-microphone text-xs sm:text-sm md:text-lg';
+            ic.className = 'fa-solid fa-microphone text-xs sm:text-sm md:text-lg';
         }
+    });
+    
+    document.getElementById('usersListToggle').addEventListener('click', function () {
+        const msg = document.getElementById('userMessagePanel');
+        const usr = document.getElementById('usersListPanel');
+        if (!msg.classList.contains('hidden')) msg.classList.add('hidden');
+        usr.classList.toggle('hidden');
+        this.classList.toggle('bg-teal-600');
+    });
+    
+    document.getElementById('userMessageBtn').addEventListener('click', function () {
+        const usr = document.getElementById('usersListPanel');
+        const msg = document.getElementById('userMessagePanel');
+        if (!usr.classList.contains('hidden')) usr.classList.add('hidden');
+        msg.classList.toggle('hidden');
     });
 
 </script>

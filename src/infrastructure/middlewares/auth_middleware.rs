@@ -13,7 +13,10 @@ pub async fn auth(
     next: Next<impl MessageBody + 'static>,
 ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
     let session = req.get_session();
-    let path = req.path().to_string();
+    let mut path = req.path().to_string();
+    if path == "/" {
+        path += "vibecall";
+    }
     println!("Auth middleware triggered for path: {}", path);
 
     let (http_req, payload) = req.parts_mut();
