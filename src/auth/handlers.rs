@@ -28,20 +28,6 @@ pub async fn login() -> actix_web::Result<HttpResponse> {
         .body(rendered))
 }
 
-#[get("/register")]
-pub async fn register() -> actix_web::Result<HttpResponse> {
-    let mut context = Context::new();
-    context.insert("title", "Register");
-
-    let rendered = TEMPLATES
-        .render("register.html", &context)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
-
-    Ok(HttpResponse::Ok()
-        .content_type(ContentType::html())
-        .body(rendered))
-}
-
 #[post("/login")]
 pub async fn login_post(
     req: actix_web::HttpRequest,

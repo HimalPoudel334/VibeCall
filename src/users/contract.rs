@@ -10,6 +10,7 @@ pub struct NewUser {
     pub email: Email,
     pub phone: PhoneNumber,
     pub password: String,
+    pub confirm_password: String,
 }
 
 #[derive(MultipartForm)]

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex justify-center items-start pt-8">
+    <div class="max-w-md w-full space-y-8">
+        <div class="bg-white p-8 rounded-lg shadow-lg border border-gray-100">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">Register</h2>
+            </div>
+            
+            <form class="mt-8 space-y-6" action="/vibecall/user/register" method="POST">
+                <div class="space-y-4">
+                    <div>
+                        <label for="firstname" class="sr-only">First Name</label>
+                        <input id="firstname" name="first_name" type="text" required                                class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               placeholder="First Name">
+                    </div>
+                    <div>
+                        <label for="lastname" class="sr-only">Last Name</label>
+                        <input id="lastname" name="last_name" type="text" required                                class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               placeholder="Last Name">
+                    </div>
+                    <div>
+                        <label for="email" class="sr-only">Email</label>
+                        <input id="email" name="email" type="email" autocomplete="email" required
+                               class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               placeholder="Email address">
+                    </div>
+                    <div>
+                        <label for="phonenumber" class="sr-only">Phone number</label>
+                        <input id="phonenumber" name="phone_number" type="text" autocomplete="phone" required
+                               class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               placeholder="Phone number">
+                    </div>
+                    <div>
+                        <label for="password" class="sr-only">Password</label>
+                        <input id="password" name="password" type="password" autocomplete="current-password" required 
+                               class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               placeholder="Password">
+                    </div>
+                    <div>
+                        <label for="confirmpassword" class="sr-only">Password</label>
+                        <input id="confirmpassword" name="confirm_password" type="password" autocomplete="current-password" required 
+                               class="relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 transition duration-200"
+                               placeholder="Enter Password again">
+                    </div>
+                </div>
+
+                <div>
+                    <button type="submit" 
+                            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-200 transform hover:-translate-y-0.5">
+                        Sign in
+                    </button>
+                </div>
+
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">
+                        Already have an account?
+                        <a href="/vibecall/auth/login" class="font-medium text-teal-600 hover:text-teal-500 ml-1 transition duration-200">
+                            Login
+                        </a>
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

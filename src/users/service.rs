@@ -21,6 +21,7 @@ pub trait UserService: Send + Sync {
         email: String,
         phone: String,
         password: String,
+        confirm_password: String,
     ) -> Result<User, AppError>;
 
     async fn update_avatar(&self, user_id: i32, avatar_url: &str) -> Result<User, AppError>;
@@ -62,12 +63,20 @@ impl UserService for UserServiceImpl {
         email: String,
         phone: String,
         password: String,
+        confirm_password: String,
     ) -> Result<User, AppError> {
-        if first_name.is_empty() || last_name.is_empty() || email.is_empty() || password.is_empty()
+        if first_name.is_empty()
+            || last_name.is_empty()
+            || email.is_empty()
+            || password.is_empty()
+            || phone.is_empty()
+            || confirm_password.is_empty()
         {
-            return Err(AppError::Validation(
-                "First name, last name, email, phone and password cannot be empty".into(),
-            ));
+            return Err(AppError::Validation("All fields are mandatory".into()));
+        }
+
+        if password != confirm_password {
+            return Err(AppError::Validation("Passwords do not match".into()));
         }
 
         if self.repository.get_by_email(&email).await?.is_some() {
